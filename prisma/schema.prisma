@@ -1,0 +1,38 @@
+// schema.prisma：Prisma 的数据模型描述文件。
+// 它本身不是数据库，只是 Prisma 层的“图纸”。
+// 数据库结构链：schema.prisma → prisma migrate dev → migration SQL → MySQL 表
+// Client 生成链：schema.prisma → prisma generate → src/generated/prisma → PrismaClient
+
+generator client {
+  // generator client：根据 schema 生成 TypeScript 可使用的 Prisma Client。
+  // 它不会创建数据库表；建表是 migrate 的工作。
+  provider = "prisma-client"
+  // output：生成代码放在哪里。业务代码之后从这里 import PrismaClient。
+  output   = "../src/generated/prisma"
+  // moduleFormat = "cjs"：当前 NestJS 项目是 CommonJS，生成 CJS Client 才能直接运行。
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  // datasource：描述 Prisma 要连接什么数据库。
+  // provider = "mysql" 表示数据库类型是 MySQL。
+  // 连接账号密码不写在 schema 里，由 prisma.config.ts 读取环境变量 DATABASE_URL。
+  provider = "mysql"
+}
+
+// model User：定义 User 数据模型。
+// 这是 Prisma 层的模型，不是数据库本身；执行 migrate 后才会变成 MySQL 里的 User 表。
+model User {
+  // @id：主键。
+  // @default(autoincrement())：由数据库生成自增主键。
+  id        Int      @id @default(autoincrement())
+  name      String
+  // @unique：唯一约束，同一张表里 email 不能重复。
+  email     String   @unique
+  // ?：可空字段，age 可以不填。
+  age       Int?
+  // @default(now())：创建记录时默认写入当前时间。
+  createdAt DateTime @default(now())
+  // @updatedAt：更新记录时 Prisma 自动维护更新时间。
+  updatedAt DateTime @updatedAt
+}

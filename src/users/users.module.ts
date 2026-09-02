@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -11,6 +12,10 @@ import { UsersService } from './users.service';
 // providers：当前模块创建和管理哪些 Provider；默认只在本模块内部可见。
 // exports：当前模块把哪些 Provider 暴露给其他模块使用。
 @Module({
+  // imports PrismaModule：UsersService 需要注入 PrismaService。
+  // 链路：UsersModule imports PrismaModule → PrismaModule exports PrismaService → UsersService 可注入。
+  imports: [PrismaModule],
+
   // controllers：注册本模块的 HTTP 入口。UsersController 只在这里登记，不再放到 AppModule。
   controllers: [UsersController],
 

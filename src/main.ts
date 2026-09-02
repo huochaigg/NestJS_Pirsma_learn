@@ -1,5 +1,9 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+
+// dotenv/config：启动时把 .env 里的 DATABASE_URL 加载进 process.env。
+// PrismaService 创建 adapter 时会读取它，所以必须在 NestFactory.create 之前加载。
 
 async function bootstrap() {
   // NestFactory：NestJS 提供的应用工厂类，负责“造出”整个应用实例。

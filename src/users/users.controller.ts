@@ -47,6 +47,13 @@ export class UsersController {
     return { clientName };
   }
 
+  // GET /users/db-test：验证 NestJS → PrismaService → PrismaClient → MySQL 这条链路。
+  // 固定路径放在 @Get(':id') 前面，避免被当成 id = "db-test"。
+  @Get('db-test')
+  getDatabaseUsers() {
+    return this.usersService.getDatabaseUsers();
+  }
+
   // @Get(':id')：动态路径，最终对应 GET /users/:id，例如 GET /users/1。
   // @Param()：从 URL 路径参数取值。路由是 /users/:id 时，@Param('id') 取出那段 id。
   // HTTP 路径参数默认是字符串，所以 /users/10 拿到的是 "10"，不是数字 10。
