@@ -6,6 +6,7 @@ import {
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { QueryUserDto } from './dto/query-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 // @Injectable()：V1 已学过。UsersService 负责用户业务逻辑，PrismaService 负责提供数据库访问能力。
@@ -23,12 +24,118 @@ export class UsersService {
   // create / findMany 等是这个 Model Client 提供的 CRUD API：
   // PrismaClient → User Model Client → CRUD Method
 
-  async findAll() {
-    // findMany()：查询多条记录。
-    // 当前不传 where 等条件，相当于查询全部 User。
-    // 返回值是 User[]。分页、排序、复杂 where 放到 V7。
-    return this.prisma.user.findMany();
+  async findAll(query: QueryUserDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+
+    const where = this.buildWhere(query);
+    const orderBy = this.buildOrderBy(query.sortBy, query.sortOrder ?? 'desc');
+    // skip：跳过前多少条。take：最多取多少条。
+    // 例如 page=3&pageSize=10 → skip=20，take=10，也就是第 21 到 30 条。
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    // findMany 和 count 互不依赖，用 Promise.all 并行等待，减少总耗时。
+    // list 和 total 必须用同一个 where，否则分页数字会对不上。
+    const [list, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+      }),
+      // count()：统计符合 where 的记录数，不返回具体数据，用来做分页 total。
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      list,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
+
+  findSimple() {
+    // select：指定数据库返回哪些字段。true 表示返回该字段，没选中的字段不会出现。
+    // 适合列表只需要部分字段时减少传输；不是每个查询都要强行 select。
+    // include 通常用于关联数据，当前 User 还没有 Relation，放到后面再学。
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+  }
+
+  private buildWhere(query: QueryUserDto): Prisma.UserWhereInput {
+    // where：描述“查询哪些数据”，相当于 SQL 的 WHERE。
+    // 只有 query 里真正传了对应参数，才加入条件，不要把所有过滤写死。
+    const where: Prisma.UserWhereInput = {};
+    const keyword = query.keyword?.trim();
+
+    if (keyword) {
+      // contains：字段中包含指定字符串，类似 SQL LIKE '%keyword%'。
+      // OR：多个条件满足任意一个即可。keyword 会同时搜 name 或 email。
+      where.OR = [
+        { name: { contains: keyword } },
+        { email: { contains: keyword } },
+      ];
+    }
+
+    if (query.age !== undefined) {
+      // equals：字段等于某个值。也可以写成 age: query.age，equals 更显式。
+      // Prisma 顶层多个条件默认是 AND：既要满足 keyword 的 OR，又要 age 相等。
+      where.age = { equals: query.age };
+    }
+
+    if (query.namePrefix?.trim()) {
+      // startsWith：字符串以指定内容开头，类似 SQL LIKE 'Tom%'。
+      where.name = { startsWith: query.namePrefix.trim() };
+    }
+
+    if (query.ids) {
+      const idList = query.ids
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((id) => !Number.isNaN(id));
+      if (idList.length > 0) {
+        // in：字段值是否属于某个集合，类似 SQL IN (1,2,3)。
+        where.id = { in: idList };
+      }
+    }
+
+    if (query.excludeEmail?.trim()) {
+      // not：排除某个条件。这里排除指定 email。
+      where.email = { not: query.excludeEmail.trim() };
+    }
+
+    return where;
+  }
+
+  private buildOrderBy(
+    sortBy?: string,
+    sortOrder: 'asc' | 'desc' = 'desc',
+  ): Prisma.UserOrderByWithRelationInput {
+    // orderBy：数据库排序。asc 升序，desc 降序。
+    // sortBy 只允许白名单字段，不能把客户端任意字符串直接传给 Prisma。
+    switch (sortBy) {
+      case 'id':
+        return { id: sortOrder };
+      case 'name':
+        return { name: sortOrder };
+      case 'age':
+        return { age: sortOrder };
+      case 'updatedAt':
+        return { updatedAt: sortOrder };
+      case 'createdAt':
+      default:
+        return { createdAt: sortOrder };
+    }
+  }
+
 
   async findOne(id: number) {
     if (Number.isNaN(id)) {

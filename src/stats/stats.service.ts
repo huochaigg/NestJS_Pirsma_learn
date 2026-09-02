@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { QueryUserDto } from '../users/dto/query-user.dto';
 import { UsersService } from '../users/users.service';
 
 // @Injectable()：V1 已学过。本类作为 Provider 注册到 StatsModule.providers。
@@ -13,7 +14,7 @@ export class StatsService {
 
   async getUserCount() {
     // 数据库操作是异步 I/O，Prisma 查询返回 Promise，所以这里要用 async/await。
-    const users = await this.usersService.findAll();
-    return { userCount: users.length };
+    const result = await this.usersService.findAll(new QueryUserDto());
+    return { userCount: result.total };
   }
 }

@@ -10,6 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
+import { QueryUserDto } from './dto/query-user.dto';
 import { SearchUserDto } from './dto/search-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
@@ -19,11 +20,16 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // 固定路径（search / request-info / upsert）放在动态 :id 前面，阅读更清晰。
+  // 固定路径（simple / search / request-info / upsert）放在动态 :id 前面。
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: QueryUserDto) {
+    return this.usersService.findAll(query);
+  }
+
+  @Get('simple')
+  findSimple() {
+    return this.usersService.findSimple();
   }
 
   @Get('search')
