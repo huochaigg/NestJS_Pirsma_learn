@@ -49,7 +49,7 @@ export class UsersController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    // Path Param 暂不使用 DTO / ParseIntPipe，继续 Number(id)。
+    // Controller 只负责接参数并调 Service。业务异常由 Service throw，NestJS 自动转成 HTTP 状态码。
     return this.usersService.findOne(Number(id));
   }
 

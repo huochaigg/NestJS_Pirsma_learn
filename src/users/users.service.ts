@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -138,25 +139,22 @@ export class UsersService {
 
 
   async findOne(id: number) {
-    if (Number.isNaN(id)) {
-      throw new NotFoundException('用户不存在');
-    }
-    // findUnique()：根据“唯一字段”查询最多一条记录。
-    // where 里的字段必须是 @id、@unique 或其他唯一约束字段。
-    // 这里 id 是 @id，所以可以用 findUnique。不能拿 name 这种非唯一字段来 findUnique。
+    this.assertValidId(id);
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
     if (!user) {
-      // 查不到时 Prisma 返回 null。这里用 NotFoundException 返回 404。
-      // 完整全局异常处理放到 V8。
-      throw new NotFoundException('用户不存在');
+      // throw 后当前方法立刻停止。
+      // NestJS 会捕获这个异常并转成 HTTP Response，Controller 不用 try/catch。
+      // NotFoundException：HTTP 404，表示请求的资源不存在。
+      throw new NotFoundException(`用户 ${id} 不存在`);
     }
     return user;
   }
 
   async findByEmail(email: string) {
-    // email 在 schema 里有 @unique，和 id 一样属于唯一字段，所以也可以 findUnique。
+    // 这是“检查用户是否存在”的辅助方法，找不到就返回 null，不抛 404。
+    // 是否抛异常取决于业务语义：findOne 必须找到用户，所以抛 404。
     return this.prisma.user.findUnique({
       where: { email },
     });
@@ -176,87 +174,77 @@ export class UsersService {
 
   async create(data: CreateUserDto) {
     try {
-      // create()：向对应数据表插入一条记录。
-      // data：要写入数据库的字段。
-      // 成功后返回创建完成的 User 对象。
       return await this.prisma.user.create({
         data,
       });
     } catch (error) {
-      this.throwIfUniqueConflict(error);
-      throw error;
+      this.handlePrismaError(error);
     }
   }
 
   async update(id: number, data: UpdateUserDto) {
-    if (Number.isNaN(id)) {
-      throw new NotFoundException('用户不存在');
-    }
+    this.assertValidId(id);
     try {
-      // update()：修改一条已经存在的记录。
-      // where：定位要更新的那一条（必须能唯一定位，这里用 id）。
-      // data：需要修改的字段。PATCH 可以只传部分字段。
+      // 方案 B：直接 update，捕获 Prisma 错误再转换 HTTP 状态。
+      // 记录不存在 → P2025 → 404；email 冲突 → P2002 → 409。
       return await this.prisma.user.update({
         where: { id },
         data,
       });
     } catch (error) {
-      this.throwIfNotFound(error);
-      throw error;
+      this.handlePrismaError(error);
     }
   }
 
   async remove(id: number) {
-    if (Number.isNaN(id)) {
-      throw new NotFoundException('用户不存在');
-    }
+    this.assertValidId(id);
     try {
-      // delete()：删除一条唯一确定的记录。
-      // where：定位要删除的目标。
-      // 成功后默认返回被删除的 User。当前不用 deleteMany()。
       return await this.prisma.user.delete({
         where: { id },
       });
     } catch (error) {
-      this.throwIfNotFound(error);
-      throw error;
+      this.handlePrismaError(error);
     }
   }
 
   async upsert(data: CreateUserDto) {
     try {
-      // upsert() = update + insert：有则更新、无则创建。
-      // where：用唯一字段判断记录是否存在，这里用 email。
-      // update：记录已存在时要改哪些字段。
-      // create：记录不存在时按这些字段新建。
       return await this.prisma.user.upsert({
         where: { email: data.email },
         update: { name: data.name, age: data.age },
         create: data,
       });
     } catch (error) {
-      this.throwIfUniqueConflict(error);
-      throw error;
+      this.handlePrismaError(error);
     }
   }
 
-  private throwIfUniqueConflict(error: unknown) {
-    // @unique 是真正的 MySQL 约束，不是 TypeScript 类型限制。
-    // 重复 email 时数据库会拒绝写入。完整错误码映射到 409 放到 V8。
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002'
-    ) {
-      throw new BadRequestException('email 已存在');
+  private assertValidId(id: number) {
+    // BadRequestException：HTTP 400，表示客户端请求参数/业务输入不合法。
+    // 参数格式不对（NaN、id <= 0）→ 400；格式对但库里没有 → 404。
+    // 也可以写成 new HttpException('...', HttpStatus.BAD_REQUEST)，
+    // 但更推荐 BadRequestException 这种语义化子类。HttpStatus 是状态码枚举，避免写魔法数字。
+    if (Number.isNaN(id) || id <= 0) {
+      throw new BadRequestException('用户 id 不合法');
     }
   }
 
-  private throwIfNotFound(error: unknown) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2025'
-    ) {
-      throw new NotFoundException('用户不存在');
+  private handlePrismaError(error: unknown): never {
+    // PrismaClientKnownRequestError：Prisma 已识别的数据库请求错误，带有稳定的 error.code。
+    // 用 unknown + instanceof 收窄类型，不要用 any 把所有错误都当业务错误。
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2002：唯一约束冲突。User.email 有 @unique 时，create/update/upsert 都可能触发。
+      // 转换成 ConflictException：HTTP 409，请求格式正确，但和当前资源状态冲突。
+      if (error.code === 'P2002') {
+        throw new ConflictException('邮箱已经存在');
+      }
+      // P2025：操作依赖的记录不存在，例如 update/delete 找不到目标。
+      if (error.code === 'P2025') {
+        throw new NotFoundException('用户不存在');
+      }
     }
+    // 未知错误（断库、代码 bug、配置错误）继续 throw，由 NestJS 按 500 处理。
+    // 不要把所有数据库错误都包装成 400，那会掩盖真正的服务器问题。
+    throw error;
   }
 }
