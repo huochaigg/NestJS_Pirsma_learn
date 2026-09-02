@@ -16,7 +16,7 @@ import { UsersService } from './users.service';
 // 例如 @Get() → GET /users，@Get(':id') → GET /users/:id。
 @Controller('users')
 export class UsersController {
-  // constructor DI：V1 已学过。NestJS 根据 AppModule.providers 创建 UsersService 并注入这里。
+  // constructor DI：同模块依赖。UsersService 在 UsersModule.providers 里，这里可以直接注入。
   constructor(private readonly usersService: UsersService) {}
 
   // 路由声明顺序：先写固定路径（search、request-info），再写动态参数路径（:id）。

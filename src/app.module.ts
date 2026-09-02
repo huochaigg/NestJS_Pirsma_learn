@@ -1,26 +1,23 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UsersController } from './users/users.controller';
-import { UsersService } from './users/users.service';
+import { StatsModule } from './stats/stats.module';
+import { UsersModule } from './users/users.module';
 
-// @Module()：NestJS 的模块装饰器。
-// NestJS 使用 Module 来组织 Controller、Service 等功能。
-// AppModule 是当前项目的根模块，NestFactory.create() 会从这里开始组装整个应用。
+// @Module()：从模块化角度看，它用来声明一个模块，并配置 imports / controllers / providers / exports。
+// AppModule 是根模块，负责组装整个应用，而不是把所有 Controller、Service 都塞进来。
 @Module({
-  // controllers：注册当前模块管理的 Controller，负责接收 HTTP 请求。
-  controllers: [
-    AppController,
-    // UsersController 放到 controllers：它负责接收 /users 相关的 HTTP 请求。
-    UsersController,
-  ],
+  // imports：导入其他 Module，让当前模块组合这些模块提供的功能。
+  // AppModule → imports UsersModule / StatsModule
+  //   → UsersModule 自己管理 UsersController + UsersService
+  //   → StatsModule 自己管理 StatsController + StatsService
+  // StatsModule 内部已经 imports UsersModule，AppModule 再 imports 一次也是允许的。
+  imports: [UsersModule, StatsModule],
 
-  // providers：注册可以被 NestJS DI 容器管理和注入的 Provider/Service。
-  providers: [
-    AppService,
-    // UsersService 放到 providers：交给 DI 容器创建实例，再注入 UsersController。
-    // 链路：AppModule → 注册 UsersService → 创建实例 → 注入 UsersController。
-    UsersService,
-  ],
+  // controllers：只保留根模块自己的 HTTP 入口。用户和统计路由已下沉到各自 Feature Module。
+  controllers: [AppController],
+
+  // providers：只保留根模块自己的 Provider。UsersService 不再注册在这里。
+  providers: [AppService],
 })
 export class AppModule {}
