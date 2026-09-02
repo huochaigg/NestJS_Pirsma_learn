@@ -47,6 +47,12 @@ export class UsersController {
     return this.usersService.upsert(createUserDto);
   }
 
+  // GET /users/:id/orders 放在 GET /users/:id 前面，阅读更清晰。
+  @Get(':id/orders')
+  findOrders(@Param('id') id: string) {
+    return this.usersService.findOrders(Number(id));
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     // Controller 只负责接参数并调 Service。业务异常由 Service throw，NestJS 自动转成 HTTP 状态码。

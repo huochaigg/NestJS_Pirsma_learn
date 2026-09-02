@@ -1,9 +1,9 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -152,6 +152,15 @@ export class UsersService {
     return user;
   }
 
+  async findOrders(userId: number) {
+    this.assertValidId(userId);
+    await this.findOne(userId);
+    // 没有用 include。直接按 Order.userId 外键查询该用户的订单。
+    return this.prisma.order.findMany({
+      where: { userId },
+    });
+  }
+
   async findByEmail(email: string) {
     // 这是“检查用户是否存在”的辅助方法，找不到就返回 null，不抛 404。
     // 是否抛异常取决于业务语义：findOne 必须找到用户，所以抛 404。
@@ -178,7 +187,7 @@ export class UsersService {
         data,
       });
     } catch (error) {
-      this.handlePrismaError(error);
+      handlePrismaKnownError(error);
     }
   }
 
@@ -192,7 +201,7 @@ export class UsersService {
         data,
       });
     } catch (error) {
-      this.handlePrismaError(error);
+      handlePrismaKnownError(error);
     }
   }
 
@@ -203,7 +212,7 @@ export class UsersService {
         where: { id },
       });
     } catch (error) {
-      this.handlePrismaError(error);
+      handlePrismaKnownError(error);
     }
   }
 
@@ -215,7 +224,7 @@ export class UsersService {
         create: data,
       });
     } catch (error) {
-      this.handlePrismaError(error);
+      handlePrismaKnownError(error);
     }
   }
 
@@ -227,24 +236,5 @@ export class UsersService {
     if (Number.isNaN(id) || id <= 0) {
       throw new BadRequestException('用户 id 不合法');
     }
-  }
-
-  private handlePrismaError(error: unknown): never {
-    // PrismaClientKnownRequestError：Prisma 已识别的数据库请求错误，带有稳定的 error.code。
-    // 用 unknown + instanceof 收窄类型，不要用 any 把所有错误都当业务错误。
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      // P2002：唯一约束冲突。User.email 有 @unique 时，create/update/upsert 都可能触发。
-      // 转换成 ConflictException：HTTP 409，请求格式正确，但和当前资源状态冲突。
-      if (error.code === 'P2002') {
-        throw new ConflictException('邮箱已经存在');
-      }
-      // P2025：操作依赖的记录不存在，例如 update/delete 找不到目标。
-      if (error.code === 'P2025') {
-        throw new NotFoundException('用户不存在');
-      }
-    }
-    // 未知错误（断库、代码 bug、配置错误）继续 throw，由 NestJS 按 500 处理。
-    // 不要把所有数据库错误都包装成 400，那会掩盖真正的服务器问题。
-    throw error;
   }
 }

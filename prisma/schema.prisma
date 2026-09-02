@@ -35,4 +35,31 @@ model User {
   createdAt DateTime @default(now())
   // @updatedAt：更新记录时 Prisma 自动维护更新时间。
   updatedAt DateTime @updatedAt
+  // orders Order[]：Prisma 关系字段（relation field），表示一个 User 可以有多个 Order。
+  // 这是 Prisma 层对“一对多”的描述，用来做关系查询和类型提示。
+  // MySQL 的 User 表里不会多出一列 orders，更不会存 JSON 数组。
+  orders    Order[]
+}
+
+// model Order：订单数据模型。一个 Order 只属于一个 User，多个 Order 可以指向同一个 User。
+// 这是一对多（1:N）：User 是 1，Order 是 N。数据库靠 Order.userId 外键实现，User 表不保存 orderIds。
+model Order {
+  id        Int      @id @default(autoincrement())
+  orderNo   String   @unique
+  // amount 用 Int，学习阶段先避免 Decimal 的精度/类型转换问题。
+  amount    Int
+  status    String   @default("pending")
+  // userId：scalar field，真正存在 MySQL Order 表里的外键列。
+  // 例如 userId = 3 表示这个订单属于 User.id = 3。关系：Order.userId → User.id。
+  userId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // user：Prisma relation field，表示当前 Order 关联的那一个 User。
+  // 它通常不是数据库里的额外列；真正存盘的是上面的 userId。
+  // @relation：声明外键怎么连。
+  // fields: [userId] → 当前表用哪个字段存外键。
+  // references: [id] → 这个外键指向 User 的哪个字段。
+  // 以后还可以配 onDelete/onUpdate（Cascade、Restrict、SetNull），V9 不实现，保持默认安全行为。
+  user      User     @relation(fields: [userId], references: [id])
 }
