@@ -11,7 +11,9 @@ export class StatsService {
   // 3. StatsModule.imports 了 UsersModule
   constructor(private readonly usersService: UsersService) {}
 
-  getUserCount(): { userCount: number } {
-    return { userCount: this.usersService.findAll().length };
+  async getUserCount() {
+    // 数据库操作是异步 I/O，Prisma 查询返回 Promise，所以这里要用 async/await。
+    const users = await this.usersService.findAll();
+    return { userCount: users.length };
   }
 }
