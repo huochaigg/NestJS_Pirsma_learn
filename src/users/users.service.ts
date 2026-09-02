@@ -5,18 +5,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-export type CreateUserInput = {
-  name: string;
-  email: string;
-  age?: number;
-};
-
-export type UpdateUserInput = {
-  name?: string;
-  email?: string;
-  age?: number;
-};
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 // @Injectable()：V1 已学过。UsersService 负责用户业务逻辑，PrismaService 负责提供数据库访问能力。
 // UsersService 不直接写 SQL，而是调用 Prisma Client。
@@ -65,16 +55,19 @@ export class UsersService {
     });
   }
 
-  async search(keyword: string) {
+  async search(keyword?: string) {
     // findFirst()：根据普通条件查询符合条件的第一条记录。
     // 和 findUnique 的最大区别：不要求查询字段具有唯一约束。
     // name 不是唯一字段，多个同名 User 时 findFirst 只返回其中第一条。
+    if (!keyword) {
+      return null;
+    }
     return this.prisma.user.findFirst({
       where: { name: keyword },
     });
   }
 
-  async create(data: CreateUserInput) {
+  async create(data: CreateUserDto) {
     try {
       // create()：向对应数据表插入一条记录。
       // data：要写入数据库的字段。
@@ -88,7 +81,7 @@ export class UsersService {
     }
   }
 
-  async update(id: number, data: UpdateUserInput) {
+  async update(id: number, data: UpdateUserDto) {
     if (Number.isNaN(id)) {
       throw new NotFoundException('用户不存在');
     }
@@ -123,7 +116,7 @@ export class UsersService {
     }
   }
 
-  async upsert(data: CreateUserInput) {
+  async upsert(data: CreateUserDto) {
     try {
       // upsert() = update + insert：有则更新、无则创建。
       // where：用唯一字段判断记录是否存在，这里用 email。

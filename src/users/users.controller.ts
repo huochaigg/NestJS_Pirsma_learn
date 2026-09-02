@@ -9,11 +9,10 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  CreateUserInput,
-  UpdateUserInput,
-  UsersService,
-} from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { SearchUserDto } from './dto/search-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UsersService } from './users.service';
 
 // @Controller('users')：当前路由前缀是 /users。
 @Controller('users')
@@ -28,8 +27,8 @@ export class UsersController {
   }
 
   @Get('search')
-  search(@Query('keyword') keyword: string) {
-    return this.usersService.search(keyword);
+  search(@Query() query: SearchUserDto) {
+    return this.usersService.search(query.keyword);
   }
 
   @Get('request-info')
@@ -37,27 +36,26 @@ export class UsersController {
     return { clientName };
   }
 
-  // POST /users/upsert：根据 email 有则更新、无则创建。
   @Post('upsert')
-  upsert(@Body() body: CreateUserInput) {
-    return this.usersService.upsert(body);
+  upsert(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.upsert(createUserDto);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    // schema 中 User.id 是 Int，Prisma 查询要求 number；HTTP 路径参数默认是 string。
-    // 当前继续 Number(id)；ParseIntPipe 后面再学。
+    // Path Param 暂不使用 DTO / ParseIntPipe，继续 Number(id)。
     return this.usersService.findOne(Number(id));
   }
 
   @Post()
-  create(@Body() body: CreateUserInput) {
-    return this.usersService.create(body);
+  create(@Body() createUserDto: CreateUserDto) {
+    // 不再手写 if 判断 name/email。格式校验由 DTO + ValidationPipe 完成。
+    return this.usersService.create(createUserDto);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateUserInput) {
-    return this.usersService.update(Number(id), body);
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(Number(id), updateUserDto);
   }
 
   @Delete(':id')
