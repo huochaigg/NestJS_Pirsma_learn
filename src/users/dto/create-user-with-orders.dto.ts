@@ -22,6 +22,18 @@ export class CreateNestedOrderDto {
   @IsInt()
   @IsPositive()
   amount!: number;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  productId!: number;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  quantity!: number;
 }
 
 export class CreateUserWithOrdersDto {

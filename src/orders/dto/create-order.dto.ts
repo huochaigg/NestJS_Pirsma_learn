@@ -24,6 +24,18 @@ export class CreateOrderDto {
   @IsPositive()
   userId!: number;
 
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  productId!: number;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  quantity!: number;
+
   @ApiPropertyOptional({ example: 'pending' })
   @IsOptional()
   @IsString()

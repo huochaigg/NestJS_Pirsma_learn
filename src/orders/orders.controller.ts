@@ -10,6 +10,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateTransactionOrderDto } from './dto/create-transaction-order.dto';
 import { CursorOrderDto } from './dto/cursor-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { OrdersService } from './orders.service';
@@ -37,6 +38,11 @@ export class OrdersController {
   @Post('connect-or-create')
   createWithConnectOrCreate(@Body() dto: CreateOrderConnectOrCreateDto) {
     return this.ordersService.createWithConnectOrCreate(dto);
+  }
+
+  @Post('transaction-create')
+  createWithTransaction(@Body() dto: CreateTransactionOrderDto) {
+    return this.ordersService.createWithTransaction(dto);
   }
 
   @Get('user/:userId')

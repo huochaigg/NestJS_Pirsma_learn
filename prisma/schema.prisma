@@ -62,4 +62,33 @@ model Order {
   // references: [id] → 这个外键指向 User 的哪个字段。
   // 以后还可以配 onDelete/onUpdate（Cascade、Restrict、SetNull），V9 不实现，保持默认安全行为。
   user      User     @relation(fields: [userId], references: [id])
+
+  // V13：一个 Order 只对应一个 Product，方便把事务学明白。
+  // 真实电商一般是 Order + OrderItem（一单多商品），这里先不做。
+  quantity  Int      @default(1)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
+// Product：最小库存模型。stock 表示当前可卖数量。
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  sku       String   @unique
+  stock     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+  logs      InventoryLog[]
+}
+
+// InventoryLog：库存流水。change 正数表示入库，负数表示出库。
+model InventoryLog {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  change    Int
+  type      String
+  remark    String?
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id])
 }

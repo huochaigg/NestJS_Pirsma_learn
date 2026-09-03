@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateTransactionOrderDto } from './dto/create-transaction-order.dto';
 import { CursorOrderDto } from './dto/cursor-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 
@@ -20,13 +25,87 @@ export class OrdersService {
     }
 
     try {
+      // 这是普通多步写法，不是事务：create Order、扣库存、写流水彼此没有原子性。
+      // 如果第二步或第三步失败，已经成功的数据不会自动撤销。
+      // 库存一致性请走 createWithTransaction。
       return await this.prisma.order.create({
         data: {
           orderNo: data.orderNo,
           amount: data.amount,
           userId: data.userId,
+          productId: data.productId,
+          quantity: data.quantity,
           status: data.status,
         },
+      });
+    } catch (error) {
+      handlePrismaKnownError(error);
+    }
+  }
+
+  async createWithTransaction(data: CreateTransactionOrderDto) {
+    try {
+      // Interactive Transaction：有 if 判断、后一步依赖前一步结果时用回调形式。
+      // transaction boundary：从回调开始到 return/throw，这一组操作同属一个事务。
+      // tx 是“事务中的 Prisma Client”。回调里所有数据库操作都必须用 tx.xxx，
+      // 不能用 this.prisma.xxx，否则那个操作不在同一个事务里。
+      // callback 正常 return → Prisma COMMIT，改动全部生效。
+      // callback 里 throw → Prisma ROLLBACK，代码“执行过”也不代表最终提交成功。
+      // Transaction != Automatically No Oversell：事务保证一组操作一起提交/回滚，
+      // 但两个事务可能都先读到 stock=1 再都认为库存足够。防超卖要到 V27。
+      return await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({
+          where: { id: data.userId },
+        });
+        if (!user) {
+          throw new NotFoundException('用户不存在');
+        }
+
+        const product = await tx.product.findUnique({
+          where: { id: data.productId },
+        });
+        if (!product) {
+          throw new NotFoundException('商品不存在');
+        }
+
+        // 库存不足是当前资源状态无法满足请求，409 比 500 更合理。
+        if (product.stock < data.quantity) {
+          throw new ConflictException('库存不足');
+        }
+
+        const order = await tx.order.create({
+          data: {
+            orderNo: data.orderNo,
+            amount: data.amount,
+            userId: data.userId,
+            productId: data.productId,
+            quantity: data.quantity,
+          },
+        });
+
+        const productAfter = await tx.product.update({
+          where: { id: data.productId },
+          // decrement：数据库层原子执行 stock = stock - quantity。
+          // increment 则是 stock = stock + n，入库用。两者都比先在 JS 里加减再 update 更适合并发写入。
+          data: { stock: { decrement: data.quantity } },
+        });
+
+        // simulateFail：仅 V13 学习测试用，正式项目应删除。
+        // 此时 Order 已 create、stock 已 decrement，但尚未 COMMIT；throw 后全部 ROLLBACK。
+        if (data.simulateFail) {
+          throw new Error('模拟事务失败');
+        }
+
+        const inventoryLog = await tx.inventoryLog.create({
+          data: {
+            productId: data.productId,
+            change: -data.quantity,
+            type: 'OUT',
+            remark: `order:${data.orderNo}`,
+          },
+        });
+
+        return { order, productAfter, inventoryLog };
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -54,6 +133,10 @@ export class OrdersService {
               },
             },
           },
+          product: {
+            connect: { id: data.productId },
+          },
+          quantity: data.quantity,
         },
         include: { user: true },
       });
