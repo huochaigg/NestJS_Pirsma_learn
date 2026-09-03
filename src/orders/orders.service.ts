@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 
@@ -25,6 +26,35 @@ export class OrdersService {
           userId: data.userId,
           status: data.status,
         },
+      });
+    } catch (error) {
+      handlePrismaKnownError(error);
+    }
+  }
+
+  async createWithConnectOrCreate(data: CreateOrderConnectOrCreateDto) {
+    try {
+      // connectOrCreate：按唯一条件找关联记录；存在就 connect，不存在就 create 后再连接。
+      // where 必须能唯一定位，这里用 User.email（@unique）。
+      // 和 upsert 不同：upsert 针对当前 Model 本身有则 update、无则 create；
+      // connectOrCreate 针对关联 Relation 有则连接、无则创建后连接。
+      return await this.prisma.order.create({
+        data: {
+          orderNo: data.orderNo,
+          amount: data.amount,
+          status: data.status,
+          user: {
+            connectOrCreate: {
+              where: { email: data.user.email },
+              create: {
+                name: data.user.name,
+                email: data.user.email,
+                age: data.user.age,
+              },
+            },
+          },
+        },
+        include: { user: true },
       });
     } catch (error) {
       handlePrismaKnownError(error);

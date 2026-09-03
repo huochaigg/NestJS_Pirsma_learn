@@ -7,10 +7,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { OrdersService } from './orders.service';
 
+@ApiTags('orders')
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
@@ -23,6 +26,11 @@ export class OrdersController {
   @Get('simple-details')
   findSimpleDetails() {
     return this.ordersService.findSimpleDetails();
+  }
+
+  @Post('connect-or-create')
+  createWithConnectOrCreate(@Body() dto: CreateOrderConnectOrCreateDto) {
+    return this.ordersService.createWithConnectOrCreate(dto);
   }
 
   @Get('user/:userId')

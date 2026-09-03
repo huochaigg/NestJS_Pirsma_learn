@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+// @nestjs/swagger：NestJS 官方 OpenAPI / Swagger 集成包。
+// OpenAPI：描述 HTTP API 的规范（路径、参数、Body）。
+// Swagger UI：根据 OpenAPI Document 生成浏览器调试页面。
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 // dotenv/config：启动时把 .env 里的 DATABASE_URL 加载进 process.env。
@@ -30,10 +34,28 @@ async function bootstrap() {
     }),
   );
 
+  // DocumentBuilder：配置 OpenAPI 文档的基本信息（title / description / version）。
+  // build() 生成这份基础配置对象。当前不配 JWT、license、多 Server。
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('NestJS + Prisma Learning API')
+    .setDescription('NestJS + Prisma V1-Vn 学习接口')
+    .setVersion('1.0')
+    .build();
+
+  // SwaggerModule.createDocument()：根据 Controller、路由、DTO 生成 OpenAPI Document。
+  // 链路：Nest Controller/DTO → createDocument() → OpenAPI 描述。
+  const documentFactory = () =>
+    SwaggerModule.createDocument(app, swaggerConfig);
+
+  // SwaggerModule.setup()：把 Swagger UI 挂到指定路径。
+  // 打开 http://localhost:4070/api-docs 就能看接口并用 Try it out 发请求。
+  // 不用 /api，避免以后业务 API 前缀和文档地址混在一起。
+  SwaggerModule.setup('api-docs', app, documentFactory);
+
   // app.listen()：启动底层 HTTP 服务器，并开始监听指定端口。
   // 调用之后，浏览器或其他客户端才能访问本应用。
-  // V1 固定监听 3000，启动成功后访问 http://localhost:3000
-  await app.listen(3000);
+  // V1 固定监听 4070，启动成功后访问 http://localhost:4070
+  await app.listen(4070);
 }
 
 // main.ts 是整个 NestJS 应用的启动入口。

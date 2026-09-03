@@ -9,13 +9,17 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserWithOrdersDto } from './dto/create-user-with-orders.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { SearchUserDto } from './dto/search-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserWithOrderDto } from './dto/update-user-with-order.dto';
 import { UsersService } from './users.service';
 
-// @Controller('users')：当前路由前缀是 /users。
+// @ApiTags：只影响 Swagger UI 分组，不影响真实 Controller 路由和业务执行。
+@ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -67,6 +71,11 @@ export class UsersController {
     return this.usersService.upsert(createUserDto);
   }
 
+  @Post('with-orders')
+  createWithOrders(@Body() dto: CreateUserWithOrdersDto) {
+    return this.usersService.createWithOrders(dto);
+  }
+
   // GET /users/:id/orders 放在 GET /users/:id 前面，阅读更清晰。
   @Get(':id/orders-details')
   findOneWithOrders(@Param('id') id: string) {
@@ -76,6 +85,30 @@ export class UsersController {
   @Get(':id/orders')
   findOrders(@Param('id') id: string) {
     return this.usersService.findOrders(Number(id));
+  }
+
+  @Post(':userId/connect-order/:orderId')
+  connectOrder(
+    @Param('userId') userId: string,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.usersService.connectOrder(Number(userId), Number(orderId));
+  }
+
+  @Patch(':id/with-orders')
+  updateWithOrder(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserWithOrderDto,
+  ) {
+    return this.usersService.updateWithOrder(Number(id), dto);
+  }
+
+  @Delete(':userId/orders/:orderId/nested')
+  nestedDeleteOrder(
+    @Param('userId') userId: string,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.usersService.nestedDeleteOrder(Number(userId), Number(orderId));
   }
 
   @Get(':id')

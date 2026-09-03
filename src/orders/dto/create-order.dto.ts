@@ -1,4 +1,5 @@
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsInt,
   IsOptional,
@@ -7,21 +8,23 @@ import {
 } from 'class-validator';
 
 export class CreateOrderDto {
+  @ApiProperty({ example: 'ORD-100' })
   @IsString()
   orderNo!: string;
 
-  // @Type(() => Number)：如果客户端把金额写成字符串，先转成 number 再校验。
+  @ApiProperty({ example: 100 })
   @Type(() => Number)
   @IsInt()
-  // @IsPositive()：数值必须大于 0。
   @IsPositive()
   amount!: number;
 
+  @ApiProperty({ example: 1 })
   @Type(() => Number)
   @IsInt()
   @IsPositive()
   userId!: number;
 
+  @ApiPropertyOptional({ example: 'pending' })
   @IsOptional()
   @IsString()
   status?: string;

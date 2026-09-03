@@ -7,8 +7,10 @@ import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserWithOrdersDto } from './dto/create-user-with-orders.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserWithOrderDto } from './dto/update-user-with-order.dto';
 
 // @Injectable()：V1 已学过。UsersService 负责用户业务逻辑，PrismaService 负责提供数据库访问能力。
 // UsersService 不直接写 SQL，而是调用 Prisma Client。
@@ -252,6 +254,115 @@ export class UsersService {
     try {
       return await this.prisma.user.create({
         data,
+      });
+    } catch (error) {
+      handlePrismaKnownError(error);
+    }
+  }
+
+  async createWithOrders(data: CreateUserWithOrdersDto) {
+    try {
+      // nested create：创建父记录 User 时，通过 Relation 字段 orders 同时创建关联 Order。
+      // Prisma 会自动写入 Order.userId，不必先拿 user.id 再循环 create。
+      // 普通写法：create User → 拿 id → 循环 create Order。
+      // nested create：一次 Relation 写操作表达“创建 User 同时创建 Orders”。
+      return await this.prisma.user.create({
+        data: {
+          name: data.name,
+          email: data.email,
+          age: data.age,
+          orders: {
+            create: data.orders,
+          },
+        },
+        include: { orders: true },
+      });
+    } catch (error) {
+      handlePrismaKnownError(error);
+    }
+  }
+
+  async connectOrder(userId: number, orderId: number) {
+    this.assertValidId(userId);
+    this.assertValidId(orderId);
+    await this.findOne(userId);
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException(`订单 ${orderId} 不存在`);
+    }
+    try {
+      // connect：关联已经存在的记录，不会新建 Order。
+      // create = 新建关联记录；connect = 把已有记录接到当前 Relation。
+      // 当前 Order 只能属于一个 User，所以 connect 会把这个订单改挂到当前用户。
+      // disconnect = 只解除关系、不删除记录。当前 Order.userId 必填，
+      // 不能把订单 disconnect 成“不属于任何人”，所以 V11 不提供 disconnect 接口。
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          orders: {
+            connect: { id: orderId },
+          },
+        },
+        include: { orders: true },
+      });
+    } catch (error) {
+      handlePrismaKnownError(error);
+    }
+  }
+
+  async updateWithOrder(id: number, data: UpdateUserWithOrderDto) {
+    this.assertValidId(id);
+    await this.findOne(id);
+    const order = await this.prisma.order.findUnique({
+      where: { id: data.orderId },
+    });
+    if (!order || order.userId !== id) {
+      throw new NotFoundException('订单不存在或不属于当前用户');
+    }
+    try {
+      // nested update：从 User update 进入 orders Relation，再改关联 Order。
+      return await this.prisma.user.update({
+        where: { id },
+        data: {
+          name: data.name,
+          orders: {
+            update: {
+              where: { id: data.orderId },
+              data: { status: data.status },
+            },
+          },
+        },
+        include: { orders: true },
+      });
+    } catch (error) {
+      handlePrismaKnownError(error);
+    }
+  }
+
+  async nestedDeleteOrder(userId: number, orderId: number) {
+    this.assertValidId(userId);
+    this.assertValidId(orderId);
+    await this.findOne(userId);
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+    if (!order || order.userId !== userId) {
+      throw new NotFoundException('订单不存在或不属于当前用户');
+    }
+    try {
+      // nested delete：通过父 Model 的 Relation 删除某条关联记录。
+      // 这是真的 DELETE Order 数据，不是只解除关系。
+      // delete = 删除关联记录；disconnect = 解除关系但记录还在。
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          orders: {
+            delete: { id: orderId },
+          },
+        },
+        include: { orders: true },
       });
     } catch (error) {
       handlePrismaKnownError(error);

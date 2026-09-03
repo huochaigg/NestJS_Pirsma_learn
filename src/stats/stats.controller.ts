@@ -1,7 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { StatsService } from './stats.service';
 
-// @Controller('stats')：当前路由前缀是 /stats。
+@ApiTags('stats')
 @Controller('stats')
 export class StatsController {
   // 保持分层：StatsController → StatsService → UsersService。
