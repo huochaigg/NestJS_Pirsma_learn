@@ -1,9 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { Request } from 'express';
 import { AppService } from './app.service';
 
 // @Controller()：声明当前类是 NestJS Controller。
 // Controller 主要负责接收 HTTP 请求，并把请求交给对应业务逻辑处理。
 // 这里没有传路径，所以它对应应用根路径，例如 GET /。
+@ApiTags('debug')
 @Controller()
 export class AppController {
   // constructor DI：这里没有手动 new AppService()。
@@ -29,5 +32,12 @@ export class AppController {
   @Get()
   getHello(): string {
     return this.appService.getHello();
+  }
+
+  @Get('request-info')
+  // @Req()：直接拿到底层 HTTP Request。平时能用 @Param/@Body/@Query 就优先用专门装饰器；
+  // 需要完整 Request 或 Middleware 挂上的自定义字段（例如 requestId）时再用 @Req()。
+  getRequestInfo(@Req() req: Request) {
+    return { requestId: req.requestId };
   }
 }

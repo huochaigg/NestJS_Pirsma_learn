@@ -1,6 +1,12 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { OrdersModule } from './orders/orders.module';
 import { ProductsModule } from './products/products.module';
 import { StatsModule } from './stats/stats.module';
@@ -23,4 +29,21 @@ import { UsersModule } from './users/users.module';
   // providers：只保留根模块自己的 Provider。UsersService 不再注册在这里。
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // NestModule：需要配置 Middleware 的 Module 要实现这个接口，并提供 configure()。
+  // class Middleware 创建出来还不够，必须通过 MiddlewareConsumer 注册到路由，否则不会执行。
+  configure(consumer: MiddlewareConsumer) {
+    // MiddlewareConsumer：用来把 Middleware 绑到指定路由。
+    consumer
+      // apply()：指定要应用哪些 Middleware。
+      .apply(LoggerMiddleware)
+      // exclude()：排除不希望应用 Middleware 的路由，避免 Swagger 静态资源刷屏。
+      .exclude(
+        { path: 'api-docs', method: RequestMethod.ALL },
+        { path: 'api-docs/{*path}', method: RequestMethod.ALL },
+      )
+      // forRoutes()：指定 Middleware 对哪些路由生效。
+      // NestJS 11 + Express 5 要用命名通配符 {*path}，不要再用旧写法 forRoutes('*')。
+      .forRoutes('{*path}');
+  }
+}
