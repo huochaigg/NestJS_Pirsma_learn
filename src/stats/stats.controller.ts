@@ -13,4 +13,9 @@ export class StatsController {
   getUserCount() {
     return this.statsService.getUserCount();
   }
+
+  @Get('users-with-orders')
+  getUsersWithOrderCount() {
+    return this.statsService.getUsersWithOrderCount();
+  }
 }

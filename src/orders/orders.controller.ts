@@ -5,8 +5,10 @@ import {
   Get,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { QueryOrderDto } from './dto/query-order.dto';
 import { OrdersService } from './orders.service';
 
 @Controller('orders')
@@ -14,14 +16,23 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get()
-  findAll() {
-    return this.ordersService.findAll();
+  findAll(@Query() query: QueryOrderDto) {
+    return this.ordersService.findAll(query);
   }
 
-  // 固定路径放在 :id 前面，避免 /orders/user/1 被当成 id = "user"。
+  @Get('simple-details')
+  findSimpleDetails() {
+    return this.ordersService.findSimpleDetails();
+  }
+
   @Get('user/:userId')
   findByUserId(@Param('userId') userId: string) {
     return this.ordersService.findByUserId(Number(userId));
+  }
+
+  @Get(':id/details')
+  findOneWithUser(@Param('id') id: string) {
+    return this.ordersService.findOneWithUser(Number(id));
   }
 
   @Get(':id')

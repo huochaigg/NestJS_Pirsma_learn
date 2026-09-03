@@ -161,6 +161,73 @@ export class UsersService {
     });
   }
 
+  async findOneWithOrders(id: number) {
+    this.assertValidId(id);
+    // include orders：User schema 里有 orders Order[]，所以 Client 允许 include: { orders: true }。
+    // 查用户时顺带查出他的订单。User 表里并没有 orders 列，数据仍来自 Order.userId。
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        orders: true,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException(`用户 ${id} 不存在`);
+    }
+    return user;
+  }
+
+  findWithPendingOrders() {
+    // some：关联的 Order 数组里“至少有一条”满足条件。
+    return this.prisma.user.findMany({
+      where: {
+        orders: {
+          some: { status: 'pending' },
+        },
+      },
+    });
+  }
+
+  findWithEveryPendingOrder() {
+    // every：所有关联 Order 都满足条件。
+    // 没有任何订单的 User，every 在 SQL 里常被当成“全部满足”，结果可能也被查出来，使用时要注意。
+    return this.prisma.user.findMany({
+      where: {
+        orders: {
+          every: { status: 'pending' },
+        },
+      },
+    });
+  }
+
+  findWithoutOrders() {
+    // none：没有任何关联记录满足条件。none: {} 表示没有任何 Order。
+    return this.prisma.user.findMany({
+      where: {
+        orders: {
+          none: {},
+        },
+      },
+    });
+  }
+
+  findWithOrderCount() {
+    // _count.orders：某个 User 关联了多少条 Order，不用把订单数据全部查回来。
+    // 区别：prisma.user.count() 统计有多少个 User；_count.orders 统计某个 User 有多少订单。
+    return this.prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        _count: {
+          select: {
+            orders: true,
+          },
+        },
+      },
+    });
+  }
+
   async findByEmail(email: string) {
     // 这是“检查用户是否存在”的辅助方法，找不到就返回 null，不抛 404。
     // 是否抛异常取决于业务语义：findOne 必须找到用户，所以抛 404。

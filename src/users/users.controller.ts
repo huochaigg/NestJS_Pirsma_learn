@@ -42,12 +42,37 @@ export class UsersController {
     return { clientName };
   }
 
+  @Get('with-pending-orders')
+  findWithPendingOrders() {
+    return this.usersService.findWithPendingOrders();
+  }
+
+  @Get('with-every-pending-order')
+  findWithEveryPendingOrder() {
+    return this.usersService.findWithEveryPendingOrder();
+  }
+
+  @Get('without-orders')
+  findWithoutOrders() {
+    return this.usersService.findWithoutOrders();
+  }
+
+  @Get('with-order-count')
+  findWithOrderCount() {
+    return this.usersService.findWithOrderCount();
+  }
+
   @Post('upsert')
   upsert(@Body() createUserDto: CreateUserDto) {
     return this.usersService.upsert(createUserDto);
   }
 
   // GET /users/:id/orders 放在 GET /users/:id 前面，阅读更清晰。
+  @Get(':id/orders-details')
+  findOneWithOrders(@Param('id') id: string) {
+    return this.usersService.findOneWithOrders(Number(id));
+  }
+
   @Get(':id/orders')
   findOrders(@Param('id') id: string) {
     return this.usersService.findOrders(Number(id));

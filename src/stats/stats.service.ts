@@ -13,8 +13,11 @@ export class StatsService {
   constructor(private readonly usersService: UsersService) {}
 
   async getUserCount() {
-    // 数据库操作是异步 I/O，Prisma 查询返回 Promise，所以这里要用 async/await。
     const result = await this.usersService.findAll(new QueryUserDto());
     return { userCount: result.total };
+  }
+
+  getUsersWithOrderCount() {
+    return this.usersService.findWithOrderCount();
   }
 }
