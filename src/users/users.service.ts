@@ -8,6 +8,7 @@ import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateUserWithOrdersDto } from './dto/create-user-with-orders.dto';
+import { CursorUserDto } from './dto/cursor-user.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserWithOrderDto } from './dto/update-user-with-order.dto';
@@ -33,13 +34,15 @@ export class UsersService {
 
     const where = this.buildWhere(query);
     const orderBy = this.buildOrderBy(query.sortBy, query.sortOrder ?? 'desc');
-    // skip：跳过前多少条。take：最多取多少条。
-    // 例如 page=3&pageSize=10 → skip=20，take=10，也就是第 21 到 30 条。
+    // Offset Pagination：客户端用 page/pageSize 表示“第几页”，服务端转成 skip/take。
+    // skip = 跳过前多少条；take = 最多取多少条。
+    // page=3&pageSize=10 → skip=20、take=10，也就是第 21 到 30 条。
+    // 适合后台表格：需要明确第 1/2/3 页，并且经常需要 total / totalPages，还能直接跳第 N 页。
+    // skip 很大时（例如 skip 100000 再 take 10）数据库仍要处理前面大量行，可能越来越慢。
     const skip = (page - 1) * pageSize;
     const take = pageSize;
 
-    // findMany 和 count 互不依赖，用 Promise.all 并行等待，减少总耗时。
-    // list 和 total 必须用同一个 where，否则分页数字会对不上。
+    // findMany 和 count 必须用同一个 where，否则 total 和 list 条件不一致。
     const [list, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
@@ -58,6 +61,46 @@ export class UsersService {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
+  }
+
+  async findCursor(query: CursorUserDto) {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor;
+
+    if (cursor !== undefined) {
+      const cursorUser = await this.prisma.user.findUnique({
+        where: { id: cursor },
+      });
+      if (!cursorUser) {
+        throw new NotFoundException(`cursor ${cursor} 对应的用户不存在`);
+      }
+    }
+
+    // Cursor Pagination：用某条唯一记录作为“从哪里继续”的位置，不是“跳过多少条”。
+    // cursor 必须用唯一且顺序稳定的字段。这里用 User.id；不要用 name，name 可能重复。
+    // cursor: { id } 表示从这条记录附近继续。
+    // skip: 1 跳过 cursor 自己，避免上一页最后一条（例如 id=10）再出现一次。
+    // take: limit + 1 多取一条，用来判断后面还有没有数据。limit=10 就取 11 条。
+    // orderBy 必须固定，且和 cursor 字段一致。V12 固定 id asc，不做动态 sortBy cursor。
+    // 不返回 total：聊天/Feed/Agent 历史/无限滚动通常只关心“还有没有下一批”。
+    const users = await this.prisma.user.findMany({
+      take: limit + 1,
+      ...(cursor
+        ? {
+            cursor: { id: cursor },
+            skip: 1,
+          }
+        : {}),
+      orderBy: { id: 'asc' },
+    });
+
+    // hasNextPage：实际条数 > limit，说明多出来的那条是“后面还有”。
+    const hasNextPage = users.length > limit;
+    const list = hasNextPage ? users.slice(0, limit) : users;
+    // nextCursor：有下一页时，用当前 list 最后一条的 id；没有则 null。
+    const nextCursor = hasNextPage ? list[list.length - 1].id : null;
+
+    return { list, nextCursor, hasNextPage };
   }
 
   findSimple() {

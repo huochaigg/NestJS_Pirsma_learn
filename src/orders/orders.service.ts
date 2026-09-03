@@ -4,6 +4,7 @@ import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CursorOrderDto } from './dto/cursor-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 
 @Injectable()
@@ -88,6 +89,39 @@ export class OrdersService {
         user: true,
       },
     });
+  }
+
+  async findCursor(query: CursorOrderDto) {
+    const limit = query.limit ?? 10;
+    const cursor = query.cursor;
+
+    if (cursor !== undefined) {
+      const cursorOrder = await this.prisma.order.findUnique({
+        where: { id: cursor },
+      });
+      if (!cursorOrder) {
+        throw new NotFoundException(`cursor ${cursor} 对应的订单不存在`);
+      }
+    }
+
+    // 订单 cursor 分页和 User 同一套：cursor + skip:1 + take:limit+1 + id asc。
+    // 真实消息流常用 createdAt + id 做复合排序；V12 只把自增 id 原理学明白，不实现复合 cursor。
+    const orders = await this.prisma.order.findMany({
+      take: limit + 1,
+      ...(cursor
+        ? {
+            cursor: { id: cursor },
+            skip: 1,
+          }
+        : {}),
+      orderBy: { id: 'asc' },
+    });
+
+    const hasNextPage = orders.length > limit;
+    const list = hasNextPage ? orders.slice(0, limit) : orders;
+    const nextCursor = hasNextPage ? list[list.length - 1].id : null;
+
+    return { list, nextCursor, hasNextPage };
   }
 
   findSimpleDetails() {

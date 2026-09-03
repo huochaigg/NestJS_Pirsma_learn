@@ -12,6 +12,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateUserWithOrdersDto } from './dto/create-user-with-orders.dto';
+import { CursorUserDto } from './dto/cursor-user.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { SearchUserDto } from './dto/search-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -29,6 +30,12 @@ export class UsersController {
   @Get()
   findAll(@Query() query: QueryUserDto) {
     return this.usersService.findAll(query);
+  }
+
+  // GET /users/cursor 必须放在 GET /users/:id 前面，否则 cursor 会被当成 id。
+  @Get('cursor')
+  findCursor(@Query() query: CursorUserDto) {
+    return this.usersService.findCursor(query);
   }
 
   @Get('simple')

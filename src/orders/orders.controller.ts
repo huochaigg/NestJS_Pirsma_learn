@@ -10,6 +10,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CursorOrderDto } from './dto/cursor-order.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { OrdersService } from './orders.service';
 
@@ -21,6 +22,11 @@ export class OrdersController {
   @Get()
   findAll(@Query() query: QueryOrderDto) {
     return this.ordersService.findAll(query);
+  }
+
+  @Get('cursor')
+  findCursor(@Query() query: CursorOrderDto) {
+    return this.ordersService.findCursor(query);
   }
 
   @Get('simple-details')
