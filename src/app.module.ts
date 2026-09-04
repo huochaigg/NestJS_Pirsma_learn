@@ -9,6 +9,7 @@ import { AppService } from './app.service';
 import { GuardDemoModule } from './guard-demo/guard-demo.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { LifecycleModule } from './lifecycle/lifecycle.module';
+import { AuthModule } from './auth/auth.module';
 import { OrdersModule } from './orders/orders.module';
 import { ProductsModule } from './products/products.module';
 import { StatsModule } from './stats/stats.module';
@@ -23,7 +24,7 @@ import { UsersModule } from './users/users.module';
   //   → UsersModule 自己管理 UsersController + UsersService
   //   → StatsModule 自己管理 StatsController + StatsService
   // StatsModule 内部已经 imports UsersModule，AppModule 再 imports 一次也是允许的。
-  imports: [UsersModule, StatsModule, OrdersModule, ProductsModule, TransactionsModule, GuardDemoModule, LifecycleModule],
+  imports: [UsersModule, StatsModule, OrdersModule, ProductsModule, TransactionsModule, GuardDemoModule, LifecycleModule, AuthModule],
 
   // controllers：只保留根模块自己的 HTTP 入口。用户和统计路由已下沉到各自 Feature Module。
   controllers: [AppController],

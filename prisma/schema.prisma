@@ -35,6 +35,9 @@ model User {
   createdAt DateTime @default(now())
   // @updatedAt：更新记录时 Prisma 自动维护更新时间。
   updatedAt DateTime @updatedAt
+  // passwordHash：只保存密码的单向 Hash，绝不保存明文 password。
+  // Hash 不可逆，登录时用 compare/verify，不是解密。
+  passwordHash String
   // orders Order[]：Prisma 关系字段（relation field），表示一个 User 可以有多个 Order。
   // 这是 Prisma 层对“一对多”的描述，用来做关系查询和类型提示。
   // MySQL 的 User 表里不会多出一列 orders，更不会存 JSON 数组。

@@ -6,6 +6,9 @@ import {
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { hashPassword } from '../auth/password';
+import { userPublicSelect } from '../users/user-public.select';
+import { randomUUID } from 'crypto';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateTransactionOrderDto } from './dto/create-transaction-order.dto';
@@ -19,6 +22,7 @@ export class OrdersService {
   async create(data: CreateOrderDto) {
     const user = await this.prisma.user.findUnique({
       where: { id: data.userId },
+      select: { id: true },
     });
     if (!user) {
       throw new NotFoundException('用户不存在');
@@ -56,6 +60,7 @@ export class OrdersService {
       return await this.prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({
           where: { id: data.userId },
+          select: { id: true },
         });
         if (!user) {
           throw new NotFoundException('用户不存在');
@@ -130,6 +135,7 @@ export class OrdersService {
                 name: data.user.name,
                 email: data.user.email,
                 age: data.user.age,
+                passwordHash: await hashPassword(randomUUID()),
               },
             },
           },
@@ -138,7 +144,11 @@ export class OrdersService {
           },
           quantity: data.quantity,
         },
-        include: { user: true },
+        include: {
+          user: {
+            select: userPublicSelect,
+          },
+        },
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -169,7 +179,9 @@ export class OrdersService {
     return this.prisma.order.findMany({
       where,
       include: {
-        user: true,
+        user: {
+          select: userPublicSelect,
+        },
       },
     });
   }
@@ -243,7 +255,9 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
-        user: true,
+        user: {
+          select: userPublicSelect,
+        },
       },
     });
     if (!order) {
@@ -255,6 +269,7 @@ export class OrdersService {
   async findByUserId(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
+      select: { id: true },
     });
     if (!user) {
       throw new NotFoundException('用户不存在');

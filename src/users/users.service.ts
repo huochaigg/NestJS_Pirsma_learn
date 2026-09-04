@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { hashPassword } from '../auth/password';
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +14,7 @@ import { CursorUserDto } from './dto/cursor-user.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserWithOrderDto } from './dto/update-user-with-order.dto';
+import { userPublicSelect } from './user-public.select';
 
 // @Injectable()：V1 已学过。UsersService 负责用户业务逻辑，PrismaService 负责提供数据库访问能力。
 // UsersService 不直接写 SQL，而是调用 Prisma Client。
@@ -49,6 +52,7 @@ export class UsersService {
         orderBy,
         skip,
         take,
+        select: userPublicSelect,
       }),
       // count()：统计符合 where 的记录数，不返回具体数据，用来做分页 total。
       this.prisma.user.count({ where }),
@@ -70,6 +74,7 @@ export class UsersService {
     if (cursor !== undefined) {
       const cursorUser = await this.prisma.user.findUnique({
         where: { id: cursor },
+        select: { id: true },
       });
       if (!cursorUser) {
         throw new NotFoundException(`cursor ${cursor} 对应的用户不存在`);
@@ -92,6 +97,7 @@ export class UsersService {
           }
         : {}),
       orderBy: { id: 'asc' },
+      select: userPublicSelect,
     });
 
     // hasNextPage：实际条数 > limit，说明多出来的那条是“后面还有”。
@@ -187,6 +193,7 @@ export class UsersService {
     this.assertValidId(id);
     const user = await this.prisma.user.findUnique({
       where: { id },
+      select: userPublicSelect,
     });
     if (!user) {
       // throw 后当前方法立刻停止。
@@ -212,7 +219,8 @@ export class UsersService {
     // 查用户时顺带查出他的订单。User 表里并没有 orders 列，数据仍来自 Order.userId。
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
+      select: {
+        ...userPublicSelect,
         orders: true,
       },
     });
@@ -230,6 +238,7 @@ export class UsersService {
           some: { status: 'pending' },
         },
       },
+      select: userPublicSelect,
     });
   }
 
@@ -242,6 +251,7 @@ export class UsersService {
           every: { status: 'pending' },
         },
       },
+      select: userPublicSelect,
     });
   }
 
@@ -253,6 +263,7 @@ export class UsersService {
           none: {},
         },
       },
+      select: userPublicSelect,
     });
   }
 
@@ -278,6 +289,7 @@ export class UsersService {
     // 是否抛异常取决于业务语义：findOne 必须找到用户，所以抛 404。
     return this.prisma.user.findUnique({
       where: { email },
+      select: userPublicSelect,
     });
   }
 
@@ -290,13 +302,20 @@ export class UsersService {
     }
     return this.prisma.user.findFirst({
       where: { name: keyword },
+      select: userPublicSelect,
     });
   }
 
   async create(data: CreateUserDto) {
     try {
+      // POST /users 是用户管理，不是注册。正式注册走 AuthModule。
+      // 这里没有用户密码，写入随机 Hash，该用户不能用已知密码登录。
       return await this.prisma.user.create({
-        data,
+        data: {
+          ...data,
+          passwordHash: await hashPassword(randomUUID()),
+        },
+        select: userPublicSelect,
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -314,11 +333,15 @@ export class UsersService {
           name: data.name,
           email: data.email,
           age: data.age,
+          passwordHash: await hashPassword(randomUUID()),
           orders: {
             create: data.orders,
           },
         },
-        include: { orders: true },
+        select: {
+          ...userPublicSelect,
+          orders: true,
+        },
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -348,7 +371,10 @@ export class UsersService {
             connect: { id: orderId },
           },
         },
-        include: { orders: true },
+        select: {
+          ...userPublicSelect,
+          orders: true,
+        },
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -377,7 +403,10 @@ export class UsersService {
             },
           },
         },
-        include: { orders: true },
+        select: {
+          ...userPublicSelect,
+          orders: true,
+        },
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -405,7 +434,10 @@ export class UsersService {
             delete: { id: orderId },
           },
         },
-        include: { orders: true },
+        select: {
+          ...userPublicSelect,
+          orders: true,
+        },
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -420,6 +452,7 @@ export class UsersService {
       return await this.prisma.user.update({
         where: { id },
         data,
+        select: userPublicSelect,
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -431,6 +464,7 @@ export class UsersService {
     try {
       return await this.prisma.user.delete({
         where: { id },
+        select: userPublicSelect,
       });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -442,7 +476,11 @@ export class UsersService {
       return await this.prisma.user.upsert({
         where: { email: data.email },
         update: { name: data.name, age: data.age },
-        create: data,
+        create: {
+          ...data,
+          passwordHash: await hashPassword(randomUUID()),
+        },
+        select: userPublicSelect,
       });
     } catch (error) {
       handlePrismaKnownError(error);
