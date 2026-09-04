@@ -43,11 +43,14 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // DocumentBuilder：配置 OpenAPI 文档的基本信息（title / description / version）。
-  // build() 生成这份基础配置对象。当前不配 JWT、license、多 Server。
+  // build() 生成这份基础配置对象。Bearer 只用于 Swagger Authorize，不负责运行时校验。
   const swaggerConfig = new DocumentBuilder()
     .setTitle('NestJS + Prisma Learning API')
     .setDescription('NestJS + Prisma V1-Vn 学习接口')
     .setVersion('1.0')
+    // addBearerAuth()：只告诉 Swagger UI 有 Bearer Token 方案，从而出现 Authorize 按钮。
+    // 它本身不验证 JWT；验证由 JwtAuthGuard 完成。
+    .addBearerAuth()
     .build();
 
   // SwaggerModule.createDocument()：根据 Controller、路由、DTO 生成 OpenAPI Document。

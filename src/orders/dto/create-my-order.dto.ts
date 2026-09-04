@@ -1,14 +1,10 @@
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsInt,
-  IsOptional,
-  IsPositive,
-  IsString,
-} from 'class-validator';
+import { IsInt, IsOptional, IsPositive, IsString } from 'class-validator';
 
-export class CreateOrderDto {
-  @ApiProperty({ example: 'ORD-100' })
+// 我的订单：userId 来自 JWT，不信任客户端 Body。
+export class CreateMyOrderDto {
+  @ApiProperty({ example: 'ORD-MY-001' })
   @IsString()
   orderNo!: string;
 
@@ -17,13 +13,6 @@ export class CreateOrderDto {
   @IsInt()
   @IsPositive()
   amount!: number;
-
-  // 学习/后台接口才从 Body 收 userId。普通用户“我的订单”绝不能信客户端声明的身份。
-  @ApiProperty({ example: 1 })
-  @Type(() => Number)
-  @IsInt()
-  @IsPositive()
-  userId!: number;
 
   @ApiProperty({ example: 1 })
   @Type(() => Number)

@@ -2,16 +2,18 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Post,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtPayload } from './types/jwt-payload.type';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -31,22 +33,14 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  // V18 学习用：手动带 Authorization: Bearer <token> 验证 JWT。V19 会改成 Guard，本接口可删。
-  @Get('verify-demo')
-  @ApiHeader({
-    name: 'Authorization',
-    description: 'Bearer <accessToken>',
-  })
-  verifyDemo(@Headers('authorization') authorization?: string) {
-    const token = this.extractBearerToken(authorization);
-    return this.authService.verifyDemo(token);
-  }
-
-  private extractBearerToken(authorization?: string) {
-    // Authorization: Bearer <accessToken> 是常见 JWT 传递方式。
-    if (!authorization?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('缺少 Bearer Token');
-    }
-    return authorization.slice('Bearer '.length).trim();
+  // @ApiBearerAuth：只告诉 Swagger 这个接口用 Bearer，Authorize 里的 Token 会带到 Header。
+  // 真正校验仍是 JwtAuthGuard；去掉装饰器不会让服务器失去安全性。
+  // Authentication（你是谁）由 JwtAuthGuard 完成；V20 才做 Authorization（你能不能做这件事）。
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  profile(@CurrentUser() user: JwtPayload) {
+    console.log('[auth] profile controller executed');
+    return this.authService.getProfile(user.sub);
   }
 }

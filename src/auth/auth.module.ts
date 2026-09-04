@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
@@ -22,6 +23,9 @@ if (!jwtSecret) {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, JwtAuthGuard],
+  // 导出 JwtAuthGuard + JwtModule：其他 Module imports AuthModule 后才能注入 Guard，
+  // 且 Guard 依赖的 JwtService 仍然来自这里的 JwtModule，不要在业务 Module 再注册一份。
+  exports: [JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}

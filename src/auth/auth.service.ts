@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -66,18 +67,6 @@ export class AuthService {
     };
   }
 
-  // verifyAsync()：验证签名、过期时间等。成功返回可信 payload；
-  // Token 被篡改、secret 不匹配或过期会抛异常。decode 只读 payload 不验签，V18 不用。
-  async verifyDemo(token: string) {
-    try {
-      return await this.jwtService.verifyAsync<{ sub: number; email: string }>(
-        token,
-      );
-    } catch {
-      throw new UnauthorizedException('无效或过期的 Token');
-    }
-  }
-
   // passwordHash 只在服务端认证内部使用，离开本方法后不会带到 HTTP Response。
   private async validateUser(email: string, password: string) {
     const user = await this.prisma.user.findUnique({
@@ -100,5 +89,17 @@ export class AuthService {
 
     const { passwordHash: _passwordHash, ...safeUser } = user;
     return safeUser;
+  }
+
+  async getProfile(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: userPublicSelect,
+    });
+    // Token 有效不等于数据库用户一定还在（可能已被删除）。
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+    return user;
   }
 }

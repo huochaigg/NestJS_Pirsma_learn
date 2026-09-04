@@ -10,6 +10,7 @@ import { hashPassword } from '../auth/password';
 import { userPublicSelect } from '../users/user-public.select';
 import { randomUUID } from 'crypto';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
+import { CreateMyOrderDto } from './dto/create-my-order.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateTransactionOrderDto } from './dto/create-transaction-order.dto';
 import { CursorOrderDto } from './dto/cursor-order.dto';
@@ -45,6 +46,20 @@ export class OrdersService {
     } catch (error) {
       handlePrismaKnownError(error);
     }
+  }
+
+  // userId 由 JWT payload.sub 传入，客户端 Body 无法覆盖。
+  createMy(userId: number, data: CreateMyOrderDto) {
+    return this.create({
+      ...data,
+      userId,
+    });
+  }
+
+  findMyOrders(userId: number) {
+    return this.prisma.order.findMany({
+      where: { userId },
+    });
   }
 
   async createWithTransaction(data: CreateTransactionOrderDto) {
