@@ -25,6 +25,9 @@ export class LoggerMiddleware implements NestMiddleware {
 
     console.log(`--> ${method} ${originalUrl}`);
     console.log(`    requestId=${req.requestId} client=${clientName}`);
+    if (originalUrl.startsWith('/lifecycle')) {
+      console.log(`[lifecycle] Middleware before requestId=${req.requestId}`);
+    }
 
     // finish：HTTP Response 已经发送完成。此时才有最终 statusCode，才能算整段耗时。
     // 不能在 next() 后面立刻 Date.now()：next() 只是把请求交给后面，
@@ -32,6 +35,11 @@ export class LoggerMiddleware implements NestMiddleware {
     res.on('finish', () => {
       const ms = Date.now() - start;
       console.log(`<-- ${method} ${originalUrl} ${res.statusCode} ${ms}ms`);
+      if (originalUrl.startsWith('/lifecycle')) {
+        console.log(
+          `[lifecycle] Middleware finish requestId=${req.requestId} ${res.statusCode}`,
+        );
+      }
     });
 
     next();

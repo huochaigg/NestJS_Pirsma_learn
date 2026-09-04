@@ -6,6 +6,8 @@ import { NestFactory } from '@nestjs/core';
 // Swagger UI：根据 OpenAPI Document 生成浏览器调试页面。
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
 // dotenv/config：启动时把 .env 里的 DATABASE_URL 加载进 process.env。
 // PrismaService 创建 adapter 时会读取它，所以必须在 NestFactory.create 之前加载。
@@ -33,6 +35,12 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // useGlobalInterceptors()：注册全局 Interceptor，所有 Controller 成功响应都经过它包装。
+  app.useGlobalInterceptors(new ResponseInterceptor());
+
+  // useGlobalFilters()：注册全局 ExceptionFilter，所有请求抛出的异常都统一走这里格式化。
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   // DocumentBuilder：配置 OpenAPI 文档的基本信息（title / description / version）。
   // build() 生成这份基础配置对象。当前不配 JWT、license、多 Server。
