@@ -17,4 +17,6 @@ export const envValidationSchema = Joi.object({
   JWT_EXPIRES_IN: Joi.string().required(),
   // LEARNING_API_KEY：V15 ApiKeyGuard 用的学习密钥。
   LEARNING_API_KEY: Joi.string().min(8).required(),
+  // REDIS_URL：Redis 连接地址，例如 redis://localhost:6379。必填，不要在代码里写死。
+  REDIS_URL: Joi.string().uri({ scheme: ['redis', 'rediss'] }).required(),
 });
