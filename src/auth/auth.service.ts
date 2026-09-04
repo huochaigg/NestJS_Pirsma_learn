@@ -11,6 +11,7 @@ import { userPublicSelect } from '../users/user-public.select';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { comparePassword, hashPassword } from './password';
+import { Role } from './types/role';
 
 @Injectable()
 export class AuthService {
@@ -32,12 +33,15 @@ export class AuthService {
     const passwordHash = await hashPassword(dto.password);
 
     try {
+      // 不要 ...dto：RegisterDto 即使被偷偷加上 role，也不能 spread 进 create。
+      // role 必须由服务端写成 USER。客户端传 { role: "ADMIN" } 不能把自己注册成管理员。
       return await this.prisma.user.create({
         data: {
           name: dto.name,
           email: dto.email,
           age: dto.age,
           passwordHash,
+          role: Role.USER,
         },
         select: userPublicSelect,
       });
@@ -50,8 +54,10 @@ export class AuthService {
     const user = await this.validateUser(dto.email, dto.password);
     // payload：JWT 中携带的声明。不要放密码、passwordHash 等敏感信息。
     // sub：JWT 标准里的 subject，表示“这个 Token 属于谁”。后续 Guard 用 payload.sub 当 userId。
+    // role 一并写入 payload：JwtAuthGuard verify 后 request.user.role 可直接给 RolesGuard 用，
+    // 当前每个请求不必再查数据库。这是 JWT 签发时的角色快照，不是实时查询。
     // JWT Signing ≠ Encryption：payload 可被客户端解码看到，签名只防篡改，不保证保密。
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, email: user.email, role: user.role };
     // signAsync()：用 JWT secret 对 payload 签名，生成字符串 Token。
     // 客户端持有后可证明“这是服务器签发的”。当前不把 Token 存数据库（无状态 Access Token）。
     const accessToken = await this.jwtService.signAsync(payload);
@@ -63,6 +69,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         age: user.age,
+        role: user.role,
       },
     };
   }

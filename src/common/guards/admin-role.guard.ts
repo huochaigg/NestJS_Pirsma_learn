@@ -6,7 +6,9 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 
-// 极小 Forbidden 演示：不是完整 RoleGuard，V20 再系统学 RBAC。
+// V15 教学演示：故意读客户端 Header x-role，用来对比 401 vs 403。
+// 这不是真正安全的授权：客户端可以自己写 x-role: admin。
+// V20 真正的 RBAC 只信任 JWT payload.role，见 RolesGuard。
 @Injectable()
 export class AdminRoleGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {

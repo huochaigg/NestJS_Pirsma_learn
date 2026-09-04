@@ -8,7 +8,8 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { JwtPayload } from '../types/jwt-payload.type';
 
-// JwtAuthGuard：真正基于登录签发 Token 的认证 Guard（Authentication：你是谁？）。
+// JwtAuthGuard = Authentication：验证 JWT，确认“你是谁”，并把 payload 写入 request.user。
+// RolesGuard = Authorization：看过身份证以后，检查你能不能进这个房间。
 // 和 V15 ApiKeyGuard 不同：ApiKey 只是 Header 值比较 Demo；这里验证的是用户 login 得到的 JWT。
 // CanActivate / ExecutionContext 已在 V15 学过：true 放行，throw 拒绝。
 @Injectable()
@@ -30,8 +31,10 @@ export class JwtAuthGuard implements CanActivate {
       // secret 沿用 AuthModule 里 JwtModule.register 的配置，与 V18 signAsync 一致。
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
       // payload.sub = 登录时写入的 User.id。从这一刻服务器知道“当前请求代表哪个用户”。
-      // Guard 不只判断 true/false，还可以把认证结果放到 Request 上，给后面的 Controller 用。
-      // 只放 JWT 里已验证的最小 payload（sub/email/iat/exp），不要放完整 User 或 passwordHash。
+      // payload.role 同样来自签名后的 JWT，不是 Header x-role / Body.role。
+      // 手动改 payload 却不重新签名 → verifyAsync 失败 → 401，轮不到 RolesGuard 把你当 ADMIN。
+      // Guard 不只判断 true/false，还可以把认证结果放到 Request 上，给后面的 Controller / RolesGuard 用。
+      // 只放 JWT 里已验证的最小 payload（sub/email/role/iat/exp），不要放完整 User 或 passwordHash。
       request.user = payload;
       return true;
     } catch (error) {

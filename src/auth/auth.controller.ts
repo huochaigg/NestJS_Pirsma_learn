@@ -35,7 +35,8 @@ export class AuthController {
 
   // @ApiBearerAuth：只告诉 Swagger 这个接口用 Bearer，Authorize 里的 Token 会带到 Header。
   // 真正校验仍是 JwtAuthGuard；去掉装饰器不会让服务器失去安全性。
-  // Authentication（你是谁）由 JwtAuthGuard 完成；V20 才做 Authorization（你能不能做这件事）。
+  // Authentication（你是谁）由 JwtAuthGuard 完成；Authorization（你能不能进这个接口）由 RolesGuard 完成。
+  // GET /auth/profile 只需要登录，不需要 @Roles：认证接口 ≠ 都要角色门槛。
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

@@ -2,6 +2,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class RegisterDto {
+  // 故意不接收 role。注册只能由服务端写成 USER。
+  // 客户端多传 { role: "ADMIN" } 会被全局 ValidationPipe 的 forbidNonWhitelisted 直接 400。
+
   @ApiProperty({ example: 'Tom' })
   @IsString()
   name!: string;

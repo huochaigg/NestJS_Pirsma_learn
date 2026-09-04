@@ -41,6 +41,7 @@ export class OrdersController {
   }
 
   // GET /orders/my 必须放在 GET /orders/:id 之前，否则 my 会被当成 id。
+  // 任何登录用户都可以看自己的订单：只要 JwtAuthGuard，不需要 @Roles。
   @Get('my')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

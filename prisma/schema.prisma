@@ -20,6 +20,17 @@ datasource db {
   provider = "mysql"
 }
 
+// enum：Prisma 枚举。字段只能从这里列出的固定值里选一个，不能随便写字符串。
+// 这里 role 只能是 USER / ADMIN / WAREHOUSE，用来做 V20 最简单的 RBAC（基于角色的访问控制）。
+// 数据库实际怎么存，以当前 Prisma + MySQL 版本生成的 migration SQL 为准
+//（常见是 MySQL ENUM 类型；不要按旧教程假设一定是 VARCHAR）。
+// V20 先用 enum 字段，不建 Role 表、不做 UserRole 多对多。
+enum Role {
+  USER
+  ADMIN
+  WAREHOUSE
+}
+
 // model User：定义 User 数据模型。
 // 这是 Prisma 层的模型，不是数据库本身；执行 migrate 后才会变成 MySQL 里的 User 表。
 model User {
@@ -38,6 +49,9 @@ model User {
   // passwordHash：只保存密码的单向 Hash，绝不保存明文 password。
   // Hash 不可逆，登录时用 compare/verify，不是解密。
   passwordHash String
+  // role：当前用户的角色。V20 一个 User 只有一个 Role（单 role 简化）。
+  // @default(USER)：新注册和旧用户迁移后都默认普通用户，不能靠客户端把自己写成 ADMIN。
+  role Role @default(USER)
   // orders Order[]：Prisma 关系字段（relation field），表示一个 User 可以有多个 Order。
   // 这是 Prisma 层对“一对多”的描述，用来做关系查询和类型提示。
   // MySQL 的 User 表里不会多出一列 orders，更不会存 JSON 数组。
