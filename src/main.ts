@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 // @nestjs/swagger：NestJS 官方 OpenAPI / Swagger 集成包。
 // OpenAPI：描述 HTTP API 的规范（路径、参数、Body）。
@@ -9,14 +9,16 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
-// dotenv/config：启动时把 .env 里的 DATABASE_URL 加载进 process.env。
-// PrismaService 创建 adapter 时会读取它，所以必须在 NestFactory.create 之前加载。
-
 async function bootstrap() {
   // NestFactory：NestJS 提供的应用工厂类，负责“造出”整个应用实例。
   // NestFactory.create()：根据根模块创建 NestJS Application。
+  // ConfigModule.forRoot() 会在这里加载 .env 并做 validationSchema 校验。
   // 这里必须传入 AppModule，因为 NestJS 要从根模块开始读取 Controller、Provider 并建立依赖注入关系。
   const app = await NestFactory.create(AppModule);
+
+  // app.get()：从 Nest Application 的 DI Container 取出已经注册的 Provider。
+  // bootstrap() 不是 class，不能 constructor 注入，所以用 app.get(ConfigService)。
+  const configService = app.get(ConfigService);
 
   // useGlobalPipes()：给整个应用注册全局 Pipe。
   // Pipe 在 Controller 方法真正拿到参数之前执行。
@@ -42,33 +44,39 @@ async function bootstrap() {
   // useGlobalFilters()：注册全局 ExceptionFilter，所有请求抛出的异常都统一走这里格式化。
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // DocumentBuilder：配置 OpenAPI 文档的基本信息（title / description / version）。
-  // build() 生成这份基础配置对象。Bearer 只用于 Swagger Authorize，不负责运行时校验。
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('NestJS + Prisma Learning API')
-    .setDescription('NestJS + Prisma V1-Vn 学习接口')
-    .setVersion('1.0')
-    // addBearerAuth()：只告诉 Swagger UI 有 Bearer Token 方案，从而出现 Authorize 按钮。
-    // 它本身不验证 JWT；验证由 JwtAuthGuard 完成。
-    .addBearerAuth()
-    .build();
+  // NODE_ENV：development / test / production。这里只用来决定要不要开 Swagger。
+  // Swagger title/version 是文档常量，部署环境之间不变，不必放进 .env。
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+  if (nodeEnv !== 'production') {
+    // DocumentBuilder：配置 OpenAPI 文档的基本信息（title / description / version）。
+    // build() 生成这份基础配置对象。Bearer 只用于 Swagger Authorize，不负责运行时校验。
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('NestJS + Prisma Learning API')
+      .setDescription('NestJS + Prisma V1-Vn 学习接口')
+      .setVersion('1.0')
+      // addBearerAuth()：只告诉 Swagger UI 有 Bearer Token 方案，从而出现 Authorize 按钮。
+      // 它本身不验证 JWT；验证由 JwtAuthGuard 完成。
+      .addBearerAuth()
+      .build();
 
-  // SwaggerModule.createDocument()：根据 Controller、路由、DTO 生成 OpenAPI Document。
-  // 链路：Nest Controller/DTO → createDocument() → OpenAPI 描述。
-  const documentFactory = () =>
-    SwaggerModule.createDocument(app, swaggerConfig);
+    // SwaggerModule.createDocument()：根据 Controller、路由、DTO 生成 OpenAPI Document。
+    // 链路：Nest Controller/DTO → createDocument() → OpenAPI 描述。
+    const documentFactory = () =>
+      SwaggerModule.createDocument(app, swaggerConfig);
 
-  // SwaggerModule.setup()：把 Swagger UI 挂到指定路径。
-  // 打开 http://localhost:4070/api-docs 就能看接口并用 Try it out 发请求。
-  // 不用 /api，避免以后业务 API 前缀和文档地址混在一起。
-  SwaggerModule.setup('api-docs', app, documentFactory);
+    // SwaggerModule.setup()：把 Swagger UI 挂到指定路径。
+    // 打开 http://localhost:4070/api-docs 就能看接口并用 Try it out 发请求。
+    // 不用 /api，避免以后业务 API 前缀和文档地址混在一起。
+    SwaggerModule.setup('api-docs', app, documentFactory);
+  }
 
+  // .env 里的 PORT 可能是字符串。validationSchema 会校验，这里再 Number() 一次，不假设一定自动转换。
+  // PORT 可以有默认值 3000；JWT_SECRET / DATABASE_URL 这种关键配置绝不能给弱默认值。
+  const port = Number(configService.get('PORT', 3000));
   // app.listen()：启动底层 HTTP 服务器，并开始监听指定端口。
-  // 调用之后，浏览器或其他客户端才能访问本应用。
-  // V1 固定监听 4070，启动成功后访问 http://localhost:4070
-  await app.listen(4070);
+  await app.listen(port);
 }
 
 // main.ts 是整个 NestJS 应用的启动入口。
-// 执行流程：main.ts → NestFactory.create(AppModule) → 创建 Application → app.listen() → HTTP 服务开始监听。
+// 执行流程：main.ts → NestFactory.create(AppModule) → ConfigModule 校验环境变量 → 创建 Application → app.listen()。
 bootstrap();

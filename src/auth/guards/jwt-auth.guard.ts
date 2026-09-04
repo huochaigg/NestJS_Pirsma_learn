@@ -28,7 +28,7 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       // 每个受保护请求先验证签名和有效期；失败则进不了 Controller。
-      // secret 沿用 AuthModule 里 JwtModule.register 的配置，与 V18 signAsync 一致。
+      // secret 来自 JwtModule.registerAsync + ConfigService，verifyAsync 不必再自己传一遍。
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
       // payload.sub = 登录时写入的 User.id。从这一刻服务器知道“当前请求代表哪个用户”。
       // payload.role 同样来自签名后的 JWT，不是 Header x-role / Body.role。

@@ -4,6 +4,7 @@ import {
   NestModule,
   RequestMethod,
 } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { GuardDemoModule } from './guard-demo/guard-demo.module';
@@ -11,6 +12,7 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { envValidationSchema } from './config/env.validation';
 import { OrdersModule } from './orders/orders.module';
 import { RbacDemoModule } from './rbac-demo/rbac-demo.module';
 import { ProductsModule } from './products/products.module';
@@ -26,7 +28,29 @@ import { UsersModule } from './users/users.module';
   //   → UsersModule 自己管理 UsersController + UsersService
   //   → StatsModule 自己管理 StatsController + StatsService
   // StatsModule 内部已经 imports UsersModule，AppModule 再 imports 一次也是允许的。
-  imports: [UsersModule, StatsModule, OrdersModule, ProductsModule, TransactionsModule, GuardDemoModule, LifecycleModule, AuthModule, AdminModule, RbacDemoModule],
+  imports: [
+    // ConfigModule：NestJS 官方配置管理模块。读取 .env 和系统环境变量，再通过 DI 提供 ConfigService。
+    // forRoot()：在根模块初始化配置。业务代码不要再散落 process.env.xxx。
+    ConfigModule.forRoot({
+      // isGlobal: true → 把 ConfigModule 做成全局模块。
+      // 其他 Feature Module 不必反复 imports ConfigModule，也能注入 ConfigService。
+      // 这和 V3“少用 Global”不矛盾：配置是整个应用都要用的基础能力，全局化是合理场景。
+      isGlobal: true,
+      // validationSchema：启动时检查环境变量是否存在、格式是否合法。
+      // 配错直接阻止启动（Fail Fast），而不是某个接口运行时才发现 JWT_SECRET 是 undefined。
+      validationSchema: envValidationSchema,
+    }),
+    UsersModule,
+    StatsModule,
+    OrdersModule,
+    ProductsModule,
+    TransactionsModule,
+    GuardDemoModule,
+    LifecycleModule,
+    AuthModule,
+    AdminModule,
+    RbacDemoModule,
+  ],
 
   // controllers：只保留根模块自己的 HTTP 入口。用户和统计路由已下沉到各自 Feature Module。
   controllers: [AppController],

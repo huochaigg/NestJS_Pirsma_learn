@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaClient, Role } from '../src/generated/prisma/client';
 
 // 仅开发环境使用：准备 USER / ADMIN / WAREHOUSE 三个可登录账号。
+// seed 脚本不是 Nest 应用，不能注入 ConfigService；这里仍直接读环境变量。
 // 不要提供公开 HTTP 接口让普通用户改自己的 role。
 async function main() {
   const adapter = new PrismaMariaDb(process.env.DATABASE_URL as string);
