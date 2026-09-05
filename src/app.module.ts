@@ -15,6 +15,7 @@ import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { envValidationSchema } from './config/env.validation';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { OrdersModule } from './orders/orders.module';
 import { RbacDemoModule } from './rbac-demo/rbac-demo.module';
 import { ProductsModule } from './products/products.module';
@@ -53,6 +54,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     AdminModule,
     RbacDemoModule,
+    DashboardModule,
   ],
 
   // controllers：只保留根模块自己的 HTTP 入口。用户和统计路由已下沉到各自 Feature Module。
