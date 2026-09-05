@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -14,7 +15,8 @@ import { JwtPayload } from '../types/jwt-payload.type';
 // CanActivate / ExecutionContext 已在 V15 学过：true 放行，throw 拒绝。
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  // Guard 也是 NestJS Provider，可以 DI 注入 JwtService，不要自己 new，也不要再硬编码 secret。
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(private readonly jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -37,9 +39,9 @@ export class JwtAuthGuard implements CanActivate {
       // 只放 JWT 里已验证的最小 payload（sub/email/role/iat/exp），不要放完整 User 或 passwordHash。
       request.user = payload;
       return true;
-    } catch (error) {
-      // 篡改、过期、签名错误都统一 401，不要把 JWT 库原始错误回给客户端。
-      console.error(error);
+    } catch {
+      // 篡改、过期、签名错误都统一 401。不要打印完整 Token 或 JWT 库原始错误。
+      this.logger.warn('jwt verify failed');
       throw new UnauthorizedException('未登录或 Token 无效');
     }
   }

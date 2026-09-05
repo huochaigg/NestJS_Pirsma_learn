@@ -7,6 +7,8 @@ import {
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RequestContextModule } from './common/context/request-context.module';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { GuardDemoModule } from './guard-demo/guard-demo.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { LifecycleModule } from './lifecycle/lifecycle.module';
@@ -40,6 +42,7 @@ import { UsersModule } from './users/users.module';
       // 配错直接阻止启动（Fail Fast），而不是某个接口运行时才发现 JWT_SECRET 是 undefined。
       validationSchema: envValidationSchema,
     }),
+    RequestContextModule,
     UsersModule,
     StatsModule,
     OrdersModule,
@@ -56,7 +59,7 @@ import { UsersModule } from './users/users.module';
   controllers: [AppController],
 
   // providers：只保留根模块自己的 Provider。UsersService 不再注册在这里。
-  providers: [AppService],
+  providers: [AppService, LoggerMiddleware, HttpExceptionFilter],
 })
 export class AppModule implements NestModule {
   // NestModule：需要配置 Middleware 的 Module 要实现这个接口，并提供 configure()。

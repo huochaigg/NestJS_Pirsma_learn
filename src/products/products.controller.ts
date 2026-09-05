@@ -30,7 +30,6 @@ export class ProductsController {
   @UseGuards(ApiKeyGuard)
   @ApiHeader({ name: 'x-api-key', description: 'V15 学习用 API Key' })
   protectedDemo() {
-    console.log('products protected-demo controller executed');
     return { message: '方法级 ApiKeyGuard 通过' };
   }
 

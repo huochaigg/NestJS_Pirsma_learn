@@ -1,7 +1,9 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { RequestContextService } from '../common/context/request-context.service';
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Product } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,26 +12,25 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { InboundProductDto } from './dto/inbound-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
-// TTL：Time To Live，缓存最多存活秒数。到期后 Redis 自动过期，下次请求重新 Cache Miss。
-// 不要永久缓存 Product：数据库会变，永不过期会长期返回旧数据。
 const PRODUCT_CACHE_TTL_SECONDS = 60;
 
 @Injectable()
 export class ProductsService {
+  // ProductsService.name 作为 Logger context：日志会带上类名，方便定位来源。
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly requestContext: RequestContextService,
   ) {}
 
-  // Cache Key 必须稳定、可预测、带业务前缀，例如 product:1 和 user:1 互不冲突。
-  // 不要用随机字符串，否则下一次 GET 找不到同一份缓存。
   private productCacheKey(id: number) {
     return `product:${id}`;
   }
 
   async create(data: CreateProductDto) {
     try {
-      // POST 创建成功后不主动写 Redis。等第一次 GET 再 Cache Aside Lazy Load。
       return await this.prisma.product.create({ data });
     } catch (error) {
       handlePrismaKnownError(error);
@@ -37,7 +38,6 @@ export class ProductsService {
   }
 
   findAll() {
-    // 列表缓存 key 要拼 keyword/page/sort，V22 只缓存详情，先把核心模式吃透。
     return this.prisma.product.findMany({
       orderBy: { id: 'asc' },
     });
@@ -49,35 +49,38 @@ export class ProductsService {
     try {
       const cached = await this.redis.getJson<Product>(key);
       if (cached) {
-        // Cache Hit：Redis 里找到了这份 Product，直接返回，不访问 MySQL。
-        console.log(`[CACHE HIT] ${key}`);
+        // debug：调试细节。HIT 很常见，正式环境默认不刷屏。
+        this.logger.debug(
+          this.requestContext.prefix(`getProduct id=${id} cache=hit`),
+        );
         return cached;
       }
-      // Cache Miss：Redis 没有该 key（不存在或已过期），需要查数据库再回填缓存。
-      console.log(`[CACHE MISS] ${key}`);
-    } catch (error) {
-      // Cache Fallback/Degradation：缓存是性能层。Redis 出错时降级走 MySQL，业务仍可用，只是变慢。
-      // 这里只 catch Redis 失败，不要把 Prisma 错误当成缓存降级。
-      console.warn(`[CACHE FALLBACK] ${key} redis get failed, query mysql`);
+      // log：普通运行信息。MISS 意味着这次会打 MySQL，值得记一笔。
+      this.logger.log(
+        this.requestContext.prefix(`getProduct id=${id} cache=miss`),
+      );
+    } catch {
+      // warn：可恢复但值得关注。Redis 失败后降级 MySQL，请求仍应成功。
+      this.logger.warn(
+        this.requestContext.prefix(
+          `getProduct id=${id} cache=fallback query=mysql`,
+        ),
+      );
     }
 
-    // Cache Aside：Application 先查 Cache；Miss 后再查 DB；DB 结果由 Application 写回 Cache。
-    // Redis 不会自己去查 MySQL。MySQL 才是 Product 的最终真相来源。
     const product = await this.prisma.product.findUnique({
       where: { id },
     });
     if (!product) {
-      // 不缓存“不存在”。不断查 999999 会每次 MISS→MySQL，这是 Cache Penetration 概念。
-      // 后续可用短 TTL 缓存 not found；也要注意刚创建的数据可能短暂不可见。V22 只说明不实现。
       throw new NotFoundException(`商品 ${id} 不存在`);
     }
 
     try {
-      // 学习项目缓存完整 Product（含 stock）。真实库存若要求强一致，应缩短 TTL、不缓存 stock，或单独处理。
-      // Redis 里的 stock 只是副本，不是库存最终来源。
       await this.redis.setJson(key, product, PRODUCT_CACHE_TTL_SECONDS);
     } catch {
-      console.warn(`[CACHE] ${key} redis set failed, still return db result`);
+      this.logger.warn(
+        this.requestContext.prefix(`setCache key=${key} failed, return db`),
+      );
     }
 
     return product;
@@ -90,9 +93,10 @@ export class ProductsService {
         where: { id },
         data,
       });
-      // Cache Invalidation：数据库改成功后 DEL 旧缓存。下次 GET 会 Miss，再从 MySQL 回填最新数据。
-      // V22 用 Update DB → Delete Cache，不在这里直接改 Redis 值。
       await this.invalidateProductCache(id);
+      this.logger.log(
+        this.requestContext.prefix(`updateProduct id=${id} success`),
+      );
       return product;
     } catch (error) {
       handlePrismaKnownError(error);
@@ -118,7 +122,6 @@ export class ProductsService {
       const result = await this.prisma.$transaction(async (tx) => {
         const product = await tx.product.update({
           where: { id },
-          // increment：数据库层原子执行 stock = stock + quantity，适合入库。
           data: { stock: { increment: data.quantity } },
         });
         const inventoryLog = await tx.inventoryLog.create({
@@ -153,7 +156,9 @@ export class ProductsService {
     try {
       await this.redis.del(key);
     } catch {
-      console.warn(`[CACHE] ${key} redis del failed`);
+      this.logger.warn(
+        this.requestContext.prefix(`delCache key=${key} failed`),
+      );
     }
   }
 }

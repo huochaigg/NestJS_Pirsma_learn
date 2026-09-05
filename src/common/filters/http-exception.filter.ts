@@ -3,46 +3,58 @@ import {
   Catch,
   ExceptionFilter,
   HttpException,
+  Injectable,
+  Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { RequestContextService } from '../context/request-context.service';
 
 // ExceptionFilter：捕获请求处理过程中抛出的异常，并统一决定最终 HTTP Response 格式。
 // Filter 负责“格式”；Service 负责“业务语义”（例如 V8 把 P2002 转成 ConflictException）。
-// @UseFilters() 可以对某个 Controller/Route 局部启用；当前用全局注册。
-// @Catch()：告诉 NestJS 当前 Filter 要捕获哪些异常。不传参数表示捕获所有异常。
+@Injectable()
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  // ArgumentsHost：类似 ExecutionContext，但用于异常场景。
-  // 通过它切换到 HTTP 上下文，拿到当前 request/response。
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
+  constructor(private readonly requestContext: RequestContextService) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const http = host.switchToHttp();
     const response = http.getResponse<Response>();
     const request = http.getRequest<Request>();
-
-    if (request.originalUrl.startsWith('/lifecycle')) {
-      console.log(`[lifecycle] ExceptionFilter requestId=${request.requestId}`);
-    }
+    const requestId =
+      request.requestId ?? this.requestContext.getRequestId();
 
     let statusCode = 500;
     let message: string | string[] = 'Internal server error';
 
     if (exception instanceof HttpException) {
-      // getStatus()：取出这个 HttpException 对应的 HTTP 状态码，例如 404/409。
       statusCode = exception.getStatus();
-      // getResponse()：取出异常内容，可能是 string，也可能是对象
-      //（ValidationPipe 的 BadRequestException 常见 { statusCode, message: string[], error }）。
       message = this.extractMessage(exception.getResponse());
+    }
+
+    if (statusCode >= 500) {
+      // stack：服务端定位调用链用，绝不能返回给客户端。
+      const stack = exception instanceof Error ? exception.stack : undefined;
+      this.logger.error(
+        `[requestId=${requestId}] path=${request.originalUrl} status=${statusCode}`,
+        stack,
+      );
     } else {
-      // 未知异常不要把 exception.message 直接回给客户端，可能含 SQL/连接串/堆栈。
-      // 前端只看到统一 500；服务端必须留下真实日志方便排查。
-      console.error(exception);
+      // 4xx 是客户端/业务可预期失败（404/401/409），用 warn，不要全部打成 error。
+      this.logger.warn(
+        `[requestId=${requestId}] path=${request.originalUrl} status=${statusCode}`,
+      );
     }
 
     response.status(statusCode).json({
       code: statusCode,
-      message,
+      message:
+        statusCode >= 500 && !(exception instanceof HttpException)
+          ? 'Internal server error'
+          : message,
       data: null,
-      requestId: request.requestId,
+      requestId,
       path: request.originalUrl,
       timestamp: new Date().toISOString(),
     });

@@ -1,10 +1,12 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { RequestContextService } from '../common/context/request-context.service';
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { userPublicSelect } from '../users/user-public.select';
@@ -15,10 +17,12 @@ import { Role } from './types/role';
 
 @Injectable()
 export class AuthService {
-  // JwtService：NestJS 对 JWT 操作的封装，可以签发、验证、解码 Token。
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly requestContext: RequestContextService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -61,6 +65,10 @@ export class AuthService {
     // signAsync()：用 JWT secret 对 payload 签名，生成字符串 Token。
     // 客户端持有后可证明“这是服务器签发的”。当前不把 Token 存数据库（无状态 Access Token）。
     const accessToken = await this.jwtService.signAsync(payload);
+    // 客户端统一提示“邮箱或密码错误”；服务器日志可以记成功 userId，不要打印 password/token。
+    this.logger.log(
+      this.requestContext.prefix(`login success userId=${user.id}`),
+    );
 
     return {
       accessToken,
@@ -86,11 +94,19 @@ export class AuthService {
 
     // email 不存在和密码错误统一 401，避免通过接口探测邮箱是否已注册。
     if (!user) {
+      this.logger.warn(
+        this.requestContext.prefix('login failed reason=user_not_found'),
+      );
       throw new UnauthorizedException('邮箱或密码错误');
     }
 
     const passwordMatched = await comparePassword(password, user.passwordHash);
     if (!passwordMatched) {
+      this.logger.warn(
+        this.requestContext.prefix(
+          `login failed reason=password_mismatch userId=${user.id}`,
+        ),
+      );
       throw new UnauthorizedException('邮箱或密码错误');
     }
 

@@ -1,12 +1,14 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { hashPassword } from '../auth/password';
+import { RequestContextService } from '../common/context/request-context.service';
 import { handlePrismaKnownError } from '../common/errors/prisma-error';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { hashPassword } from '../auth/password';
 import { userPublicSelect } from '../users/user-public.select';
 import { randomUUID } from 'crypto';
 import { CreateOrderConnectOrCreateDto } from './dto/create-order-connect-or-create.dto';
@@ -18,7 +20,12 @@ import { QueryOrderDto } from './dto/query-order.dto';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(OrdersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly requestContext: RequestContextService,
+  ) {}
 
   async create(data: CreateOrderDto) {
     const user = await this.prisma.user.findUnique({
@@ -63,6 +70,11 @@ export class OrdersService {
   }
 
   async createWithTransaction(data: CreateTransactionOrderDto) {
+    this.logger.log(
+      this.requestContext.prefix(
+        `transaction start productId=${data.productId} quantity=${data.quantity}`,
+      ),
+    );
     try {
       // Interactive Transaction：有 if 判断、后一步依赖前一步结果时用回调形式。
       // transaction boundary：从回调开始到 return/throw，这一组操作同属一个事务。
@@ -90,6 +102,11 @@ export class OrdersService {
 
         // 库存不足是当前资源状态无法满足请求，409 比 500 更合理。
         if (product.stock < data.quantity) {
+          this.logger.warn(
+            this.requestContext.prefix(
+              `transaction stock_insufficient productId=${data.productId} stock=${product.stock} quantity=${data.quantity}`,
+            ),
+          );
           throw new ConflictException('库存不足');
         }
 
@@ -125,9 +142,19 @@ export class OrdersService {
           },
         });
 
+        this.logger.log(
+          this.requestContext.prefix(
+            `transaction committed orderNo=${data.orderNo} productId=${data.productId}`,
+          ),
+        );
         return { order, productAfter, inventoryLog };
       });
     } catch (error) {
+      this.logger.error(
+        this.requestContext.prefix(
+          `transaction rollback productId=${data.productId}`,
+        ),
+      );
       handlePrismaKnownError(error);
     }
   }

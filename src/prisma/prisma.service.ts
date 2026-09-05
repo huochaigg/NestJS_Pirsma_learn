@@ -18,5 +18,6 @@ export class PrismaService extends PrismaClient {
     // 里面会自动出现 user 等模型访问 API，例如 this.user.findMany()。
     // PrismaService 只是给 PrismaClient 包一层 NestJS Provider，让业务模块可以注入它。
     super({ adapter });
+    // Prisma 可以 log: ['query'] 打印每条 SQL。开发可选，生产默认不要全开：很吵，还可能带敏感参数。V23 不开启。
   }
 }

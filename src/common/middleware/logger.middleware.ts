@@ -1,47 +1,33 @@
 import { randomUUID } from 'crypto';
-import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
+import { RequestContextService } from '../context/request-context.service';
 
 // NestMiddleware：NestJS 的 class Middleware 接口。实现它必须提供 use(req, res, next)。
-// Middleware 在请求进入路由处理之前执行，适合日志、requestId、读 Header 等通用前置逻辑。
-// 不要在这里写 User/Order 业务，也不要做登录校验（那是 Guard）。
-// 当前项目用 Express adapter；如果换成 Fastify，req/res 类型会不同。V14 不切换。
+// 这里的日志是 HTTP access log：method、url、statusCode、duration。
+// Service Logger 才是业务日志（cache miss、登录失败）。两种都要，内容不同。
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
+  // Logger：NestJS 内置日志工具，可按级别输出，并用 context 标明来自哪个类。
+  private readonly logger = new Logger(LoggerMiddleware.name);
+
+  constructor(private readonly requestContext: RequestContextService) {}
+
   use(req: Request, res: Response, next: NextFunction) {
-    // req：当前 HTTP Request。res：当前 HTTP Response。
-    // next：把控制权交给后面的处理链。不是“结束 Middleware”。
-    // 忘记 next() 且自己也不结束 response，请求会一直挂住。
-    // 也可以在这里直接 res.status(403).send(...) 且不 next()，请求就不会进 Controller；
-    // V14 只说明这个能力，不真的拦截正常接口。
     const start = Date.now();
     const { method, originalUrl } = req;
-
-    // Middleware 可以给 request 增加上下文，后续 Controller 可通过 @Req() 读取。
     req.requestId = randomUUID();
 
-    const clientName =
-      req.headers['x-client-name'] ?? req.headers['user-agent'] ?? '-';
-
-    console.log(`--> ${method} ${originalUrl}`);
-    console.log(`    requestId=${req.requestId} client=${clientName}`);
-    if (originalUrl.startsWith('/lifecycle')) {
-      console.log(`[lifecycle] Middleware before requestId=${req.requestId}`);
-    }
-
-    // finish：HTTP Response 已经发送完成。此时才有最终 statusCode，才能算整段耗时。
-    // 不能在 next() 后面立刻 Date.now()：next() 只是把请求交给后面，
-    // Controller/Service/Prisma 往往是异步的，当时请求还没真正结束。
     res.on('finish', () => {
-      const ms = Date.now() - start;
-      console.log(`<-- ${method} ${originalUrl} ${res.statusCode} ${ms}ms`);
-      if (originalUrl.startsWith('/lifecycle')) {
-        console.log(
-          `[lifecycle] Middleware finish requestId=${req.requestId} ${res.statusCode}`,
-        );
-      }
+      const duration = Date.now() - start;
+      // 只保留完成日志，减少噪音。成功/4xx/5xx 都记，方便排查。
+      // 不要打印完整 headers：里面可能有 Authorization、Cookie。
+      this.logger.log(
+        `request completed requestId=${req.requestId} method=${method} path=${originalUrl} status=${res.statusCode} duration=${duration}ms`,
+      );
     });
 
-    next();
+    // 必须在 ALS.run 里调用 next()，后续 await 的 Service 才能读到同一个 requestId。
+    this.requestContext.run(req.requestId, () => next());
   }
 }

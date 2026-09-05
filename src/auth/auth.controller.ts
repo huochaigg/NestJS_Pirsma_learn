@@ -41,7 +41,6 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   profile(@CurrentUser() user: JwtPayload) {
-    console.log('[auth] profile controller executed');
     return this.authService.getProfile(user.sub);
   }
 }

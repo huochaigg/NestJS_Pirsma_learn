@@ -1,4 +1,10 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  NotFoundException,
+  Req,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AppService } from './app.service';
@@ -10,34 +16,29 @@ import { AppService } from './app.service';
 @Controller()
 export class AppController {
   // constructor DI：这里没有手动 new AppService()。
-  // 为什么不写 new AppService()？
-  // 因为 NestJS 会根据 AppModule.providers 的配置，由依赖注入容器自动创建 AppService 实例，
-  // 再把这个实例注入到 AppController。我们只需要在构造函数里声明“我需要 AppService”。
-  //
-  // 完整链路：
-  // AppModule.providers
-  //   ↓
-  // NestJS DI Container
-  //   ↓
-  // 创建 AppService
-  //   ↓
-  // 注入 AppController
-  //   ↓
-  // Controller 就可以调用 this.appService
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly configService: ConfigService,
+  ) {}
 
   // @Get()：把 HTTP GET 请求映射到当前方法。
-  // 因为 Controller 没有额外路径，所以这里对应 GET /。
-  // Controller 只负责接收请求并返回响应，具体返回什么文字由 Service 决定。
   @Get()
   getHello(): string {
     return this.appService.getHello();
   }
 
   @Get('request-info')
-  // @Req()：直接拿到底层 HTTP Request。平时能用 @Param/@Body/@Query 就优先用专门装饰器；
-  // 需要完整 Request 或 Middleware 挂上的自定义字段（例如 requestId）时再用 @Req()。
+  // @Req()：直接拿到底层 HTTP Request。需要 Middleware 挂上的 requestId 时再用。
   getRequestInfo(@Req() req: Request) {
     return { requestId: req.requestId };
+  }
+
+  // 仅 development 用来验证 ExceptionFilter：客户端 500 不带 stack，服务端日志有 stack + requestId。
+  @Get('debug/error')
+  triggerInternalError() {
+    if (this.configService.get('NODE_ENV') === 'production') {
+      throw new NotFoundException();
+    }
+    throw new Error('test internal error');
   }
 }

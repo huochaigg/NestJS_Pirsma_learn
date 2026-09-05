@@ -1,23 +1,22 @@
-import { ValidationPipe } from '@nestjs/common';
+import { LogLevel, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-// @nestjs/swagger：NestJS 官方 OpenAPI / Swagger 集成包。
-// OpenAPI：描述 HTTP API 的规范（路径、参数、Body）。
-// Swagger UI：根据 OpenAPI Document 生成浏览器调试页面。
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import 'dotenv/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
 async function bootstrap() {
-  // NestFactory：NestJS 提供的应用工厂类，负责“造出”整个应用实例。
-  // NestFactory.create()：根据根模块创建 NestJS Application。
-  // ConfigModule.forRoot() 会在这里加载 .env 并做 validationSchema 校验。
-  // 这里必须传入 AppModule，因为 NestJS 要从根模块开始读取 Controller、Provider 并建立依赖注入关系。
-  const app = await NestFactory.create(AppModule);
+  // bootstrap 时 ConfigService 还不存在，日志级别只能先读 NODE_ENV。
+  // production 关掉 debug/verbose，减少噪音；error/warn/log 必须保留。
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const loggerLevels: LogLevel[] =
+    nodeEnv === 'production'
+      ? ['error', 'warn', 'log']
+      : ['error', 'warn', 'log', 'debug', 'verbose'];
 
-  // app.get()：从 Nest Application 的 DI Container 取出已经注册的 Provider。
-  // bootstrap() 不是 class，不能 constructor 注入，所以用 app.get(ConfigService)。
+  const app = await NestFactory.create(AppModule, { logger: loggerLevels });
   const configService = app.get(ConfigService);
 
   // useGlobalPipes()：给整个应用注册全局 Pipe。
@@ -40,14 +39,13 @@ async function bootstrap() {
 
   // useGlobalInterceptors()：注册全局 Interceptor，所有 Controller 成功响应都经过它包装。
   app.useGlobalInterceptors(new ResponseInterceptor());
-
-  // useGlobalFilters()：注册全局 ExceptionFilter，所有请求抛出的异常都统一走这里格式化。
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // Filter 需要注入 RequestContextService，所以从 DI 取出，不要 new。
+  app.useGlobalFilters(app.get(HttpExceptionFilter));
 
   // NODE_ENV：development / test / production。这里只用来决定要不要开 Swagger。
   // Swagger title/version 是文档常量，部署环境之间不变，不必放进 .env。
-  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-  if (nodeEnv !== 'production') {
+  const appNodeEnv = configService.get<string>('NODE_ENV', 'development');
+  if (appNodeEnv !== 'production') {
     // DocumentBuilder：配置 OpenAPI 文档的基本信息（title / description / version）。
     // build() 生成这份基础配置对象。Bearer 只用于 Swagger Authorize，不负责运行时校验。
     const swaggerConfig = new DocumentBuilder()
