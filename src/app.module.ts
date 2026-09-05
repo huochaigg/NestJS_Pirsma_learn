@@ -19,6 +19,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { OrdersModule } from './orders/orders.module';
 import { RbacDemoModule } from './rbac-demo/rbac-demo.module';
 import { ProductsModule } from './products/products.module';
+import { SqlDemoModule } from './sql-demo/sql-demo.module';
 import { StatsModule } from './stats/stats.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UsersModule } from './users/users.module';
@@ -55,6 +56,7 @@ import { UsersModule } from './users/users.module';
     AdminModule,
     RbacDemoModule,
     DashboardModule,
+    SqlDemoModule,
   ],
 
   // controllers：只保留根模块自己的 HTTP 入口。用户和统计路由已下沉到各自 Feature Module。
